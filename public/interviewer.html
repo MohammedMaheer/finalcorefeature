@@ -257,12 +257,103 @@
     .metric-poor {
       color: #dc3545;
     }
+    .malpractice-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 14px;
+    }
+    .malpractice-item i {
+      margin-right: 8px;
+      color: #dc3545;
+    }
+    .malpractice-item-time {
+      font-size: 12px;
+      color: #6c757d;
+      margin-left: auto;
+    }
+    .malpractice-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #dc3545;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .object-detected {
+      position: absolute;
+      top: 0;
+      left: 0;
+      border: 2px solid #dc3545;
+      background-color: rgba(220, 53, 69, 0.2);
+      color: white;
+      font-size: 12px;
+      padding: 2px 5px;
+      border-radius: 2px;
+      pointer-events: none;
+    }
     .hidden {
+      display: none;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 9999;
+    }
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .reconnecting-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background-color: #ffc107;
+      color: #212529;
+      text-align: center;
+      padding: 10px;
+      z-index: 1000;
       display: none;
     }
   </style>
 </head>
 <body>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="text-white">Initializing interview platform...</div>
+    <div class="text-white-50 mt-2">Setting up secure connection</div>
+  </div>
+  
+  <div id="reconnectingBanner" class="reconnecting-banner">
+    <strong><i class="bi bi-arrow-repeat"></i> Reconnecting to interview...</strong>
+  </div>
+  
   <div class="container-fluid">
     <div class="row">
       <!-- Sidebar -->
@@ -325,6 +416,8 @@
           <div class="video-box">
             <video id="remoteVideo" autoplay></video>
             <div class="video-label">Candidate</div>
+            <div id="malpracticeBadge" class="malpractice-badge hidden">0</div>
+            <div id="objectDetections"></div>
           </div>
         </div>
         
@@ -381,7 +474,14 @@
           <!-- Notes Tab -->
           <div class="tab-pane fade" id="notes" role="tabpanel">
             <h5 class="mb-3">Interview Notes</h5>
-            <textarea id="interviewNotes" placeholder="Type your interview notes here..."></textarea>
+            <div class="notes-container">
+              <textarea id="interviewNotes" placeholder="Type your interview notes here..."></textarea>
+              <div class="d-flex justify-content-end mt-2">
+                <button id="saveNotesBtn" class="btn btn-sm btn-primary">
+                  <i class="bi bi-save"></i> Save Notes
+                </button>
+              </div>
+            </div>
           </div>
           
           <!-- AI Report Tab -->
@@ -459,13 +559,17 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Global variables
+    const socket = io({
+      reconnectionAttempts: 5,
+      timeout: 10000,
+      reconnectionDelay: 1000
+    });
+    
     // Generate a room ID
     const roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
     const userId = Math.random().toString(36).substring(2, 15);
-    document.getElementById('roomId').textContent = roomId;
-    
-    // Socket.io connection
-    const socket = io();
+  
     let localStream;
     let remoteStream;
     let peerConnection;
@@ -475,19 +579,12 @@
     let recognition;
     let interviewTimerInterval;
     let interviewStartTime;
-    let audioContext;
     let isTranscribing = true;
     let isMuted = false;
     let isVideoOff = false;
-
-    // STUN servers for NAT traversal
-    const iceServers = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
-
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 5;
+    
     // DOM elements
     const copyRoomIdBtn = document.getElementById('copyRoomId');
     const muteBtn = document.getElementById('muteBtn');
@@ -496,30 +593,106 @@
     const transcriptContainer = document.getElementById('transcriptContainer');
     const autoTranscriptSwitch = document.getElementById('autoTranscriptSwitch');
     const interviewNotes = document.getElementById('interviewNotes');
+    const saveNotesBtn = document.getElementById('saveNotesBtn');
     const generateReportBtn = document.getElementById('startGenerateReport');
     const regenerateReportBtn = document.getElementById('regenerateReportBtn');
     const downloadReportBtn = document.getElementById('downloadReportBtn');
     const malpracticeAlert = document.getElementById('malpracticeAlert');
     const malpracticeMessage = document.getElementById('malpracticeMessage');
     const malpracticeList = document.getElementById('malpracticeList');
+    const malpracticeBadge = document.getElementById('malpracticeBadge');
     const statusCircle = document.getElementById('statusCircle');
     const connectionStatus = document.getElementById('connectionStatus');
     const interviewTimer = document.getElementById('interviewTimer');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const reconnectingBanner = document.getElementById('reconnectingBanner');
+    const objectDetections = document.getElementById('objectDetections');
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
     
-    // Copy room ID to clipboard
-    copyRoomIdBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(roomId);
-      copyRoomIdBtn.textContent = 'Copied!';
-      setTimeout(() => {
-        copyRoomIdBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard';
-      }, 2000);
-    });
-
-    // Set up media and join room
+    // Initialize the application
     async function init() {
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
+        // Display room ID
+        document.getElementById('roomId').textContent = roomId;
+        
+        // Setup socket listeners
+        setupSocketListeners();
+        
+        // Get media access
+        await setupMediaDevices();
+        
+        // Join room
+        joinRoom();
+        
+        // Set up UI controls
+        setupUIControls();
+        
+        // Start timer when interview begins
+        startInterviewTimer();
+        
+        // Hide loading overlay
+        setTimeout(() => {
+          loadingOverlay.style.display = 'none';
+        }, 1500);
+        
+      } catch (error) {
+        console.error('Error initializing application:', error);
+        loadingOverlay.style.display = 'none';
+        alert('Failed to initialize the application. Please refresh the page and try again.');
+      }
+    }
+    
+    // Set up socket event listeners
+    function setupSocketListeners() {
+      socket.on('connect', () => {
+        console.log('Connected to server');
+        reconnectingBanner.style.display = 'none';
+        reconnectAttempts = 0;
+        
+        // If we were in a room before disconnection, try to rejoin
+        if (roomId) {
+          socket.emit('reconnect-user', roomId, userId, 'interviewer');
+        }
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        reconnectingBanner.style.display = 'block';
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        reconnectAttempts++;
+        if (reconnectAttempts > maxReconnectAttempts) {
+          alert('Failed to connect to the server. Please refresh the page and try again.');
+        }
+      });
+      
+      socket.on('user-connected', handleUserConnected);
+      socket.on('user-reconnected', handleUserConnected);
+      socket.on('existing-users', handleExistingUsers);
+      socket.on('offer', handleOffer);
+      socket.on('answer', handleAnswer);
+      socket.on('ice-candidate', handleIceCandidate);
+      socket.on('user-disconnected', handleUserDisconnected);
+      socket.on('transcription', handleTranscription);
+      socket.on('tab-switch-detected', handleTabSwitch);
+      socket.on('malpractice-detected', handleMalpracticeDetection);
+    }
+    
+    // Setup media devices
+    async function setupMediaDevices() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }, 
+          audio: true 
+        });
+        
+        localVideo.srcObject = localStream;
         
         // Initialize speech recognition if available
         if ('webkitSpeechRecognition' in window) {
@@ -530,527 +703,138 @@
           document.getElementById('transcriptionStatus').classList.replace('bg-success', 'bg-danger');
           document.getElementById('transcriptionStatus').textContent = 'Transcription Unavailable';
         }
-        
-        joinRoom();
-        
-        // Set up UI controls
-        muteBtn.addEventListener('click', toggleMute);
-        videoToggleBtn.addEventListener('click', toggleVideo);
-        endCallBtn.addEventListener('click', endCall);
-        autoTranscriptSwitch.addEventListener('change', toggleTranscription);
-        generateReportBtn.addEventListener('click', generateReport);
-        regenerateReportBtn.addEventListener('click', generateReport);
-        downloadReportBtn.addEventListener('click', downloadReport);
-        
-        // Start timer when interview begins
-        startInterviewTimer();
-        
-        // Setup visibility change detection
-        document.addEventListener('visibilitychange', handleVisibilityChange);
       } catch (error) {
         console.error('Error accessing media devices:', error);
-        alert('Failed to access camera and microphone. Please ensure they are connected and permissions are granted.');
+        throw new Error('Camera and microphone access denied');
       }
     }
-
-    function joinRoom() {
-      socket.emit('join-room', roomId, userId, 'interviewer');
-      
-      socket.on('user-connected', (otherUserId, userType) => {
-        if (userType === 'candidate') {
-          statusCircle.classList.remove('status-waiting');
-          statusCircle.classList.add('status-connected');
-          connectionStatus.textContent = 'Candidate connected!';
-          
-          createPeerConnection(otherUserId);
-          
-          // As the interviewer, we initiate the offer
-          createOffer();
-          
-          // Add connected timestamp to transcript
-          addSystemMessage('Candidate joined the interview');
-        }
+    
+    // Setup UI controls
+    function setupUIControls() {
+      // Copy room ID button
+      copyRoomIdBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(roomId);
+        copyRoomIdBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyRoomIdBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard';
+        }, 2000);
       });
       
-      socket.on('offer', async (offer, senderId) => {
+      // Media controls
+      muteBtn.addEventListener('click', toggleMute);
+      videoToggleBtn.addEventListener('click', toggleVideo);
+      endCallBtn.addEventListener('click', endCall);
+      
+      // Other UI controls
+      autoTranscriptSwitch.addEventListener('change', toggleTranscription);
+      saveNotesBtn.addEventListener('click', saveNotes);
+      generateReportBtn.addEventListener('click', generateReport);
+      regenerateReportBtn.addEventListener('click', generateReport);
+      downloadReportBtn.addEventListener('click', downloadReport);
+      
+      // Load saved notes if any
+      loadSavedNotes();
+    }
+    
+    // Join room
+    function joinRoom() {
+      console.log(`Creating room ${roomId} as ${userId} (interviewer)`);
+      socket.emit('join-room', roomId, userId, 'interviewer');
+    }
+    
+    // Handle user connected event
+    function handleUserConnected(otherUserId, userType) {
+      console.log(`User connected: ${otherUserId}, type: ${userType}`);
+      if (userType === 'candidate') {
+        statusCircle.classList.remove('status-waiting');
+        statusCircle.classList.add('status-connected');
+        connectionStatus.textContent = 'Candidate connected!';
+        
+        createPeerConnection(otherUserId);
+        
+        // As the interviewer, we initiate the offer
+        createOffer();
+        
+        // Add connected timestamp to transcript
+        addSystemMessage('Candidate joined the interview');
+      }
+    }
+    
+    // Handle existing users
+    function handleExistingUsers(users) {
+      console.log('Existing users in room:', users);
+      const candidate = users.find(user => user.type === 'candidate');
+      if (candidate) {
+        statusCircle.classList.remove('status-waiting');
+        statusCircle.classList.add('status-connected');
+        connectionStatus.textContent = 'Candidate connected!';
+        
+        createPeerConnection(candidate.id);
+        createOffer();
+        
+        addSystemMessage('Reconnected to candidate');
+      }
+    }
+    
+    // Handle offer
+    async function handleOffer(offer, senderId) {
+      console.log('Received offer from:', senderId);
+      try {
         if (!peerConnection) {
           createPeerConnection(senderId);
         }
-        try {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          socket.emit('answer', roomId, answer);
-        } catch (error) {
-          console.error('Error handling offer:', error);
-        }
-      });
-      
-      socket.on('answer', async (answer) => {
-        try {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        } catch (error) {
-          console.error('Error handling answer:', error);
-        }
-      });
-      
-      socket.on('ice-candidate', async (candidate) => {
-        try {
-          if (peerConnection) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-          }
-        } catch (error) {
-          console.error('Error adding ice candidate:', error);
-        }
-      });
-      
-      socket.on('user-disconnected', () => {
-        statusCircle.classList.remove('status-connected');
-        statusCircle.classList.add('status-disconnected');
-        connectionStatus.textContent = 'Candidate disconnected.';
-        document.getElementById('remoteVideo').srcObject = null;
+        
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('answer', roomId, answer);
+        console.log('Sent answer to offer');
+      } catch (error) {
+        console.error('Error handling offer:', error);
+        // Attempt to recover
         if (peerConnection) {
           peerConnection.close();
-          peerConnection = null;
         }
-        addSystemMessage('Candidate left the interview');
-      });
-      
-      socket.on('tab-switch-detected', () => {
-        displayMalpractice('Tab Switch', 'Candidate switched to another tab or window');
-      });
-      
-      socket.on('transcription', (transcript, fromUserId) => {
-        if (fromUserId !== userId) {
-          addTranscriptMessage('Candidate', transcript);
-        }
-      });
-    }
-
-    function createPeerConnection(otherUserId) {
-      peerConnection = new RTCPeerConnection(iceServers);
-      
-      // Add local tracks to the connection
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-      });
-      
-      // Handle incoming remote stream
-      peerConnection.ontrack = event => {
-        document.getElementById('remoteVideo').srcObject = event.streams[0];
-        remoteStream = event.streams[0];
-        
-        // Setup malpractice detection for video
-        if (event.track.kind === 'video') {
-          setupObjectDetection(event.streams[0]);
-        }
-      };
-      
-      // Handle ICE candidates
-      peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', roomId, event.candidate);
-        }
-      };
-      
-      peerConnection.onconnectionstatechange = event => {
-        if (peerConnection.connectionState === 'connected') {
-          statusCircle.classList.remove('status-waiting');
-          statusCircle.classList.add('status-connected');
-          connectionStatus.textContent = 'Connected to candidate.';
-        }
-      };
-    }
-
-    async function createOffer() {
-      try {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit('offer', roomId, offer);
-      } catch (error) {
-        console.error('Error creating offer:', error);
-      }
-    }
-
-    function setupSpeechRecognition() {
-      recognition = new webkitSpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      
-      let currentTranscript = '';
-      
-      recognition.onresult = (event) => {
-        if (!isTranscribing) return;
-        
-        let interimTranscript = '';
-        let finalTranscript = '';
-        
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-        
-        if (finalTranscript && finalTranscript !== currentTranscript) {
-          currentTranscript = finalTranscript;
-          addTranscriptMessage('Interviewer', finalTranscript);
-          socket.emit('transcription', roomId, finalTranscript, userId);
-        }
-      };
-      
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error', event.error);
-        if (event.error === 'no-speech') {
-          // Restart recognition if it stops due to no speech
-          recognition.stop();
-          setTimeout(() => {
-            if (isTranscribing) recognition.start();
-          }, 1000);
-        }
-      };
-      
-      recognition.onend = () => {
-        // Restart recognition if it ends and should be active
-        if (isTranscribing) {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.error('Error restarting speech recognition:', e);
-          }
-        }
-      };
-      
-      // Start recognition
-      try {
-        recognition.start();
-      } catch (e) {
-        console.error('Error starting speech recognition:', e);
-      }
-    }
-
-    function toggleTranscription() {
-      isTranscribing = autoTranscriptSwitch.checked;
-      
-      if (isTranscribing && recognition) {
+        createPeerConnection(senderId);
         try {
-          recognition.start();
-          document.getElementById('transcriptionStatus').classList.replace('bg-danger', 'bg-success');
-          document.getElementById('transcriptionStatus').textContent = 'Transcription Active';
-        } catch (e) {
-          console.error('Error starting speech recognition:', e);
-        }
-      } else if (recognition) {
-        recognition.stop();
-        document.getElementById('transcriptionStatus').classList.replace('bg-success', 'bg-danger');
-        document.getElementById('transcriptionStatus').textContent = 'Transcription Paused';
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('answer', roomId, answer);
+      } catch (retryError) {
+        console.error('Failed to recover from offer error:', retryError);
       }
     }
-
-    function addTranscriptMessage(user, text) {
-      const timestamp = new Date().toLocaleTimeString();
-      const messageData = { user, text, timestamp };
-      transcriptData.push(messageData);
-      
-      const messageDiv = document.createElement('div');
-      messageDiv.className = user === 'Interviewer' ? 'transcript-msg interviewer-msg' : 'transcript-msg candidate-msg';
-      
-      messageDiv.innerHTML = `
-        <div class="transcript-user">${user} <small class="text-muted">${timestamp}</small></div>
-        <div class="transcript-text">${text}</div>
-      `;
-      
-      transcriptContainer.appendChild(messageDiv);
-      transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-    }
-
-    function addSystemMessage(text) {
-      const timestamp = new Date().toLocaleTimeString();
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'transcript-msg text-center';
-      
-      messageDiv.innerHTML = `
-        <div class="transcript-text text-muted">
-          <i class="bi bi-info-circle"></i> ${text} <small>${timestamp}</small>
-        </div>
-      `;
-      
-      transcriptContainer.appendChild(messageDiv);
-      transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-    }
-
-    function toggleMute() {
-      const audioTracks = localStream.getAudioTracks();
-      if (audioTracks.length === 0) return;
-      
-      isMuted = !isMuted;
-      audioTracks[0].enabled = !isMuted;
-      
-      muteBtn.innerHTML = isMuted ? 
-        '<i class="bi bi-mic-mute-fill"></i>' : 
-        '<i class="bi bi-mic-fill"></i>';
-      
-      muteBtn.classList.toggle('active', isMuted);
-    }
-
-    function toggleVideo() {
-      const videoTracks = localStream.getVideoTracks();
-      if (videoTracks.length === 0) return;
-      
-      isVideoOff = !isVideoOff;
-      videoTracks[0].enabled = !isVideoOff;
-      
-      videoToggleBtn.innerHTML = isVideoOff ? 
-        '<i class="bi bi-camera-video-off-fill"></i>' : 
-        '<i class="bi bi-camera-video-fill"></i>';
-      
-      videoToggleBtn.classList.toggle('active', isVideoOff);
-    }
-
-    function endCall() {
-      if (confirm('Are you sure you want to end this interview?')) {
-        stopInterviewTimer();
-        if (recognition) recognition.stop();
-        window.location.href = '/';
+  }
+  
+  // Handle answer
+  async function handleAnswer(answer) {
+    console.log('Received answer');
+    try {
+      if (peerConnection && peerConnection.signalingState !== 'closed') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
       }
+    } catch (error) {
+      console.error('Error handling answer:', error);
     }
-
-    function startInterviewTimer() {
-      interviewStartTime = new Date();
-      interviewTimerInterval = setInterval(updateTimer, 1000);
-    }
-
-    function stopInterviewTimer() {
-      clearInterval(interviewTimerInterval);
-    }
-
-    function updateTimer() {
-      const now = new Date();
-      const diff = now - interviewStartTime;
-      const hours = Math.floor(diff / 3600000);
-      const minutes = Math.floor((diff % 3600000) / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      
-      interviewTimer.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-
-    function handleVisibilityChange() {
-      if (document.hidden) {
-        // Interviewer tab is hidden
-      } else {
-        // Interviewer tab is visible again
+  }
+  
+  // Handle ICE candidate
+  async function handleIceCandidate(candidate) {
+    console.log('Received ICE candidate');
+    try {
+      if (peerConnection && peerConnection.signalingState !== 'closed') {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       }
+    } catch (error) {
+      console.error('Error adding ice candidate:', error);
     }
-
-    function displayMalpractice(type, message) {
-      const timestamp = new Date().toLocaleTimeString();
-      malpracticeIncidents.push({ type, message, timestamp });
-      
-      // Add to malpractice list in sidebar
-      const malpracticeItem = document.createElement('div');
-      malpracticeItem.className = 'text-danger small mb-2';
-      malpracticeItem.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> ${type} (${timestamp})`;
-      
-      // Clear "No issues detected" message if it exists
-      if (malpracticeList.querySelector('.text-muted')) {
-        malpracticeList.innerHTML = '';
-      }
-      
-      malpracticeList.appendChild(malpracticeItem);
-      
-      // Show alert
-      malpracticeMessage.textContent = message;
-      malpracticeAlert.classList.remove('hidden');
-      
-      // Hide alert after 5 seconds
-      setTimeout(() => {
-        malpracticeAlert.classList.add('hidden');
-      }, 5000);
-    }
-
-    // Simulate object detection in video feed
-    function setupObjectDetection(stream) {
-      // For this demo, we'll just simulate object detection
-      // In a real implementation, this would use a computer vision API or model
-      const detectObjects = () => {
-        // Simulate random object detection occasionally
-        if (Math.random() < 0.05) {
-          const objects = ['phone', 'person', 'book', 'notes'];
-          const detectedObject = objects[Math.floor(Math.random() * objects.length)];
-          displayMalpractice('Object Detected', `Detected ${detectedObject} in candidate's view`);
-        }
-      };
-      
-      // Check every 10 seconds (would be more frequent in real implementation)
-      const objectDetectionInterval = setInterval(detectObjects, 10000);
-      
-      // Clean up when stream ends
-      stream.getVideoTracks()[0].onended = () => {
-        clearInterval(objectDetectionInterval);
-      };
-    }
-
-    // Generate AI report
-    function generateReport() {
-      // Show loading state
-      document.getElementById('reportLoading').classList.remove('hidden');
-      document.getElementById('reportContent').classList.add('hidden');
-      
-      // Simulate AI processing time
-      setTimeout(() => {
-        generateAIReport();
-        
-        // Hide loading state and show report
-        document.getElementById('reportLoading').classList.add('hidden');
-        document.getElementById('reportContent').classList.remove('hidden');
-      }, 2000);
-    }
-
-    function generateAIReport() {
-      // In a real implementation, this would call an API to generate the report
-      // based on the transcript and malpractice data
-      
-      // For demo purposes, we'll generate a simulated report
-      const technicalScore = 7 + Math.floor(Math.random() * 4);
-      const communicationScore = 6 + Math.floor(Math.random() * 5);
-      const problemSolvingScore = 6 + Math.floor(Math.random() * 5);
-      
-      // Calculate integrity score based on malpractice incidents
-      const integrityScore = Math.max(3, 10 - malpracticeIncidents.length * 2);
-      
-      // Update the report UI
-      document.getElementById('technicalScore').textContent = `${technicalScore}/10`;
-      document.getElementById('communicationScore').textContent = `${communicationScore}/10`;
-      document.getElementById('problemSolvingScore').textContent = `${problemSolvingScore}/10`;
-      document.getElementById('integrityScore').textContent = `${integrityScore}/10`;
-      
-      // Set color classes based on scores
-      setScoreClass('technicalScore', technicalScore);
-      setScoreClass('communicationScore', communicationScore);
-      setScoreClass('problemSolvingScore', problemSolvingScore);
-      setScoreClass('integrityScore', integrityScore);
-      
-      // Generate summary
-      const overallScore = Math.round((technicalScore + communicationScore + problemSolvingScore + integrityScore) / 4);
-      let summary = '';
-      
-      if (overallScore >= 8) {
-        summary = 'The candidate demonstrated strong technical knowledge and excellent communication skills throughout the interview. Their problem-solving approach was methodical and effective.';
-      } else if (overallScore >= 6) {
-        summary = 'The candidate showed adequate technical knowledge with good communication skills. Their problem-solving approach was satisfactory but could be improved in some areas.';
-      } else {
-        summary = 'The candidate struggled with technical questions and their communication could be improved. Their problem-solving approach lacked structure and effectiveness.';
-      }
-      
-      if (malpracticeIncidents.length > 0) {
-        summary += ` However, there were ${malpracticeIncidents.length} integrity concerns during the interview that should be considered in the evaluation.`;
-      }
-      
-      document.getElementById('reportSummary').textContent = summary;
-      
-      // Generate strengths
-      const strengthsList = document.getElementById('strengthsList');
-      strengthsList.innerHTML = '';
-      
-      const possibleStrengths = [
-        'Strong technical knowledge in relevant areas',
-        'Clear and concise communication',
-        'Excellent problem-solving approach',
-        'Good understanding of industry best practices',
-        'Demonstrated ability to work under pressure',
-        'Asked insightful questions about the role'
-      ];
-      
-      // Select 2-4 strengths
-      const numStrengths = 2 + Math.floor(Math.random() * 3);
-      const selectedStrengths = shuffleArray(possibleStrengths).slice(0, numStrengths);
-      
-      selectedStrengths.forEach(strength => {
-        const li = document.createElement('li');
-        li.textContent = strength;
-        strengthsList.appendChild(li);
-      });
-      
-      // Generate improvement areas
-      const improvementsList = document.getElementById('improvementsList');
-      improvementsList.innerHTML = '';
-      
-      const possibleImprovements = [
-        'Could improve depth of technical knowledge in some areas',
-        'Communication could be more structured',
-        'Problem-solving approach could be more methodical',
-        'Could provide more specific examples from past experience',
-        'Would benefit from more practical experience with mentioned technologies',
-        'Should work on concise explanations of complex concepts'
-      ];
-      
-      // Select 2-3 improvement areas
-      const numImprovements = 2 + Math.floor(Math.random() * 2);
-      const selectedImprovements = shuffleArray(possibleImprovements).slice(0, numImprovements);
-      
-      selectedImprovements.forEach(improvement => {
-        const li = document.createElement('li');
-        li.textContent = improvement;
-        improvementsList.appendChild(li);
-      });
-      
-      // Display malpractice incidents
-      const malpracticeReport = document.getElementById('malpracticeReport');
-      
-      if (malpracticeIncidents.length > 0) {
-        let malpracticeHTML = '<ul class="mt-2 text-danger">';
-        
-        malpracticeIncidents.forEach(incident => {
-          malpracticeHTML += `<li>${incident.type}: ${incident.message} (${incident.timestamp})</li>`;
-        });
-        
-        malpracticeHTML += '</ul>';
-        malpracticeReport.innerHTML = `${malpracticeIncidents.length} malpractice incidents detected:${malpracticeHTML}`;
-      } else {
-        malpracticeReport.textContent = 'No malpractice incidents detected during the interview.';
-      }
-    }
-
-    function setScoreClass(elementId, score) {
-      const element = document.getElementById(elementId);
-      element.classList.remove('metric-good', 'metric-average', 'metric-poor');
-      
-      if (score >= 8) {
-        element.classList.add('metric-good');
-      } else if (score >= 6) {
-        element.classList.add('metric-average');
-      } else {
-        element.classList.add('metric-poor');
-      }
-    }
-
-    function shuffleArray(array) {
-      const shuffled = [...array];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    }
-
-    function downloadReport() {
-      const reportContent = document.getElementById('reportContent').innerText;
-      const blob = new Blob([reportContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `candidate_report_${new Date().toISOString().slice(0, 10)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    // Initialize when document is ready
-    window.addEventListener('DOMContentLoaded', init);
-  </script>
-</body>
-</html>
+  }
+  
+  // Handle user disconnected
+  function handleUserDisconnected(userId, userType) {
+    console.log(`User disconnected: ${userId}, type: ${userType}`);
+    if (userType === 'candidate') {
+      statusCircle.classList.remove('status-connected');
+      statusCircle.classList.add('status-disconnected');
+      connectionStatus.textContent = 'Candidate disconnected.';
