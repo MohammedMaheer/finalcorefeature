@@ -6,6 +6,9 @@
   <title>Candidate View</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <!-- Add CodeMirror for code editor -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/theme/monokai.min.css">
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -14,7 +17,7 @@
       padding: 20px;
     }
     .container {
-      max-width: 1000px;
+      max-width: 1200px;
       margin: 0 auto;
     }
     .join-form {
@@ -209,6 +212,110 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    
+    /* Coding environment styles */
+    .interview-content {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .coding-container {
+      background-color: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .coding-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .problem-container {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+    }
+    
+    .CodeMirror {
+      height: 350px;
+      font-size: 14px;
+      border-radius: 6px;
+    }
+    
+    .coding-controls {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+    }
+    
+    .output-container {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+    
+    .language-selector {
+      min-width: 150px;
+    }
+    
+    .tabs-container {
+      display: flex;
+      margin-top: 20px;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 4px 4px 0 0;
+      margin-right: 5px;
+    }
+    
+    .tab.active {
+      border-color: #dee2e6 #dee2e6 #fff;
+      background-color: white;
+      margin-bottom: -1px;
+    }
+    
+    /* Test results styles */
+    .test-result {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    
+    .test-result-pass {
+      background-color: #d1e7dd;
+    }
+    
+    .test-result-fail {
+      background-color: #f8d7da;
+    }
+    
+    .test-result-details {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -243,40 +350,91 @@
         <strong>Important:</strong> Please remain on this tab during the interview. Switching tabs will be recorded as a malpractice incident.
       </div>
       
-      <div class="video-container">
-        <div class="video-box">
-          <h3>You (Candidate)</h3>
-          <video id="localVideo" autoplay muted playsinline></video>
-        </div>
-        <div class="video-box">
-          <h3>Interviewer</h3>
-          <video id="remoteVideo" autoplay playsinline></video>
-        </div>
+      <!-- Tabs for switching between video and coding -->
+      <div class="tabs-container">
+        <div id="videoTab" class="tab active">Video Interview</div>
+        <div id="codingTab" class="tab">Coding Environment</div>
       </div>
       
-      <div class="controls">
-        <button id="muteBtn" class="control-btn mute-btn">
-          <i class="bi bi-mic-fill"></i>
-        </button>
-        <button id="videoToggleBtn" class="control-btn video-btn">
-          <i class="bi bi-camera-video-fill"></i>
-        </button>
-        <button id="leaveBtn" class="control-btn end-btn">
-          <i class="bi bi-telephone-x-fill"></i>
-        </button>
-      </div>
-      
-      <div class="transcript-container">
-        <div class="transcript-header">
-          <h4>Interview Transcript</h4>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="autoTranscriptSwitch" checked>
-            <label class="form-check-label" for="autoTranscriptSwitch">Enable transcription</label>
+      <div class="interview-content">
+        <div id="videoContent">
+          <div class="video-container">
+            <div class="video-box">
+              <h3>You (Candidate)</h3>
+              <video id="localVideo" autoplay muted playsinline></video>
+            </div>
+            <div class="video-box">
+              <h3>Interviewer</h3>
+              <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+          </div>
+          
+          <div class="controls">
+            <button id="muteBtn" class="control-btn mute-btn">
+              <i class="bi bi-mic-fill"></i>
+            </button>
+            <button id="videoToggleBtn" class="control-btn video-btn">
+              <i class="bi bi-camera-video-fill"></i>
+            </button>
+            <button id="leaveBtn" class="control-btn end-btn">
+              <i class="bi bi-telephone-x-fill"></i>
+            </button>
+          </div>
+          
+          <div class="transcript-container">
+            <div class="transcript-header">
+              <h4>Interview Transcript</h4>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="autoTranscriptSwitch" checked>
+                <label class="form-check-label" for="autoTranscriptSwitch">Enable transcription</label>
+              </div>
+            </div>
+            <div class="transcript-content" id="transcriptContainer">
+              <div class="text-center text-muted py-3">
+                Transcript will appear here once the interview begins
+              </div>
+            </div>
           </div>
         </div>
-        <div class="transcript-content" id="transcriptContainer">
-          <div class="text-center text-muted py-3">
-            Transcript will appear here once the interview begins
+        
+        <!-- Coding Environment -->
+        <div id="codingContent" class="hidden">
+          <div class="coding-container">
+            <div class="coding-header">
+              <h4>Coding Challenge</h4>
+              <select id="languageSelector" class="form-select language-selector">
+                <option value="javascript">JavaScript</option>
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+                <option value="cpp">C++</option>
+              </select>
+            </div>
+            
+            <div id="problemContainer" class="problem-container">
+              <h5>Problem Statement</h5>
+              <div id="problemDescription">
+                <div class="text-center text-muted py-3">
+                  Waiting for the interviewer to send a coding problem...
+                </div>
+              </div>
+            </div>
+            
+            <div id="codeEditorContainer">
+              <textarea id="codeEditor"></textarea>
+            </div>
+            
+            <div class="coding-controls">
+              <button id="runBtn" class="btn btn-success">
+                <i class="bi bi-play-fill"></i> Run Code
+              </button>
+              <button id="submitBtn" class="btn btn-primary">
+                <i class="bi bi-send-fill"></i> Submit Solution
+              </button>
+            </div>
+            
+            <div id="outputContainer" class="output-container">
+              <div class="text-muted">Code output will appear here...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -293,8 +451,14 @@
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
+  
+  <!-- Add CodeMirror and its dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/python/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/clike/clike.min.js"></script>
+  
   <script>
-    // Simple candidate implementation without YOLO
     document.addEventListener('DOMContentLoaded', function() {
       // Elements
       const joinBtn = document.getElementById('joinBtn');
@@ -313,6 +477,17 @@
       const transcriptContainer = document.getElementById('transcriptContainer');
       const autoTranscriptSwitch = document.getElementById('autoTranscriptSwitch');
       
+      // Coding environment elements
+      const videoTab = document.getElementById('videoTab');
+      const codingTab = document.getElementById('codingTab');
+      const videoContent = document.getElementById('videoContent');
+      const codingContent = document.getElementById('codingContent');
+      const languageSelector = document.getElementById('languageSelector');
+      const problemDescription = document.getElementById('problemDescription');
+      const runBtn = document.getElementById('runBtn');
+      const submitBtn = document.getElementById('submitBtn');
+      const outputContainer = document.getElementById('outputContainer');
+      
       // Variables
       let userId = Math.random().toString(36).substring(2, 15);
       let roomId;
@@ -322,6 +497,64 @@
       let recognition;
       let isMuted = false;
       let isVideoOff = false;
+      let codeEditor;
+      let currentProblem = null;
+      
+      // Initialize CodeMirror
+      codeEditor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+        mode: 'javascript',
+        theme: 'monokai',
+        lineNumbers: true,
+        autoCloseBrackets: true,
+        tabSize: 2,
+        lineWrapping: true
+      });
+      
+      // Language change handler
+      languageSelector.addEventListener('change', function() {
+        const language = this.value;
+        let mode;
+        
+        switch (language) {
+          case 'javascript':
+            mode = 'javascript';
+            break;
+          case 'python':
+            mode = 'python';
+            break;
+          case 'java':
+          case 'cpp':
+            mode = 'text/x-' + language;
+            break;
+          default:
+            mode = 'javascript';
+        }
+        
+        codeEditor.setOption('mode', mode);
+        
+        // Update starter code if problem exists
+        if (currentProblem && currentProblem.starterCode && currentProblem.starterCode[language]) {
+          codeEditor.setValue(currentProblem.starterCode[language]);
+        }
+      });
+      
+      // Tab switching
+      videoTab.addEventListener('click', function() {
+        videoTab.classList.add('active');
+        codingTab.classList.remove('active');
+        videoContent.classList.remove('hidden');
+        codingContent.classList.add('hidden');
+      });
+      
+      codingTab.addEventListener('click', function() {
+        codingTab.classList.add('active');
+        videoTab.classList.remove('active');
+        codingContent.classList.remove('hidden');
+        videoContent.classList.add('hidden');
+        
+        // Refresh the editor when showing it (fixes layout issues)
+        codeEditor.refresh();
+      });
       
       // Hide loading overlay
       loadingOverlay.style.display = 'none';
@@ -436,6 +669,19 @@
             addTranscriptMessage('Interviewer', transcript);
           }
         });
+        
+        // New events for coding environment
+        socket.on('coding-problem', (problem) => {
+          receiveCodingProblem(problem);
+        });
+        
+        socket.on('code-execution-result', (result) => {
+          displayCodeOutput(result);
+        });
+        
+        socket.on('feedback', (feedback) => {
+          displayFeedback(feedback);
+        });
       }
       
       function createPeerConnection() {
@@ -531,6 +777,53 @@
               recognition.stop();
             }
           }
+        });
+        
+        // Run code button
+        runBtn.addEventListener('click', () => {
+          const code = codeEditor.getValue();
+          const language = languageSelector.value;
+          
+          if (!code.trim()) {
+            outputContainer.innerHTML = '<div class="text-danger">Please write some code before running.</div>';
+            return;
+          }
+          
+          outputContainer.innerHTML = '<div class="text-muted">Running code...</div>';
+          
+          socket.emit('run-code', roomId, {
+            code,
+            language,
+            userId
+          });
+        });
+        
+        // Submit solution button
+        submitBtn.addEventListener('click', () => {
+          const code = codeEditor.getValue();
+          const language = languageSelector.value;
+          
+          if (!code.trim()) {
+            outputContainer.innerHTML = '<div class="text-danger">Please write some code before submitting.</div>';
+            return;
+          }
+          
+          if (!currentProblem) {
+            outputContainer.innerHTML = '<div class="text-danger">No active problem to submit a solution for.</div>';
+            return;
+          }
+          
+          outputContainer.innerHTML = '<div class="text-muted">Submitting solution...</div>';
+          
+          socket.emit('submit-solution', roomId, {
+            code,
+            language,
+            problemId: currentProblem.id,
+            userId
+          });
+          
+          // Also notify in the transcript
+          addSystemMessage('Solution submitted for: ' + currentProblem.title);
         });
       }
       
@@ -658,7 +951,147 @@
         transcriptContainer.appendChild(messageDiv);
         transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
       }
+      
+      // Coding environment functions
+      function receiveCodingProblem(problem) {
+        // Store the current problem
+        currentProblem = problem;
+        
+        // Update problem display
+        let description = `
+          <h5>${problem.title}</h5>
+          <div class="problem-description mb-3">
+            ${problem.description}
+          </div>
+        `;
+        
+        if (problem.examples && problem.examples.length > 0) {
+          description += '<h6>Examples:</h6>';
+          
+          problem.examples.forEach((example, index) => {
+            description += `
+              <div class="example mb-2">
+                <strong>Example ${index + 1}:</strong><br>
+                <strong>Input:</strong> ${example.input}<br>
+                <strong>Output:</strong> ${example.output}<br>
+                ${example.explanation ? `<strong>Explanation:</strong> ${example.explanation}` : ''}
+              </div>
+            `;
+          });
+        }
+        
+        if (problem.constraints) {
+          description += `
+            <h6>Constraints:</h6>
+            <div class="constraints mb-2">
+              ${problem.constraints}
+            </div>
+          `;
+        }
+        
+        // Set starter code if provided for current language
+        const language = languageSelector.value;
+        if (problem.starterCode && problem.starterCode[language]) {
+          codeEditor.setValue(problem.starterCode[language]);
+        } else {
+          // Set default starter code based on language
+          let starterCode = '';
+          
+          switch (language) {
+            case 'javascript':
+              starterCode = `// ${problem.title}\n\nfunction solution(input) {\n  // Your code here\n  \n}\n\n// Example usage\nconsole.log(solution());`;
+              break;
+            case 'python':
+              starterCode = `# ${problem.title}\n\ndef solution(input):\n    # Your code here\n    pass\n\n# Example usage\nprint(solution())`;
+              break;
+            case 'java':
+              starterCode = `// ${problem.title}\n\npublic class Solution {\n    public static void main(String[] args) {\n        // Example usage\n        System.out.println(solution());\n    }\n    \n    public static Object solution(Object input) {\n        // Your code here\n        return null;\n    }\n}`;
+              break;
+            case 'cpp':
+              starterCode = `// ${problem.title}\n\n#include <iostream>\nusing namespace std;\n\n// Write your solution here\nObject solution(Object input) {\n    // Your code here\n    return nullptr;\n}\n\nint main() {\n    // Example usage\n    cout << "Result: " << solution(nullptr) << endl;\n    return 0;\n}`;
+              break;
+          }
+          
+          codeEditor.setValue(starterCode);
+        }
+        
+        // Update the UI
+        problemDescription.innerHTML = description;
+        
+        // Switch to coding tab
+        codingTab.click();
+        
+        // Notify in transcript
+        addSystemMessage(`New coding problem received: ${problem.title}`);
+      }
+      
+      function displayCodeOutput(result) {
+        let outputHTML = '';
+        
+        if (result.success) {
+          outputHTML += `<div class="text-success mb-2"><strong>Success!</strong></div>`;
+        } else {
+          outputHTML += `<div class="text-danger mb-2"><strong>Error:</strong></div>`;
+        }
+        
+        if (result.output) {
+          outputHTML += `<pre>${result.output}</pre>`;
+        }
+        
+        if (result.error) {
+          outputHTML += `<pre class="text-danger">${result.error}</pre>`;
+        }
+        
+        if (result.executionTime) {
+          outputHTML += `<div class="text-muted mt-2">Execution time: ${result.executionTime}ms</div>`;
+        }
+        
+        // Display test results if present
+        if (result.testResults) {
+          outputHTML += `<div class="mt-3">
+            <strong>Test Results:</strong> ${result.passedTests || 0}/${result.totalTests || 0} tests passed
+          </div>`;
+          
+          // Show detailed test results if provided
+          if (result.testResults.length > 0) {
+            outputHTML += `<div class="test-results mt-2">`;
+            result.testResults.forEach((test, index) => {
+              const resultClass = test.testPassed ? 'test-result-pass' : 'test-result-fail';
+              outputHTML += `
+                <div class="test-result ${resultClass}">
+                  <strong>Test ${index + 1}:</strong> 
+                  <span class="${test.testPassed ? 'text-success' : 'text-danger'}">
+                    ${test.testPassed ? 'PASS' : 'FAIL'}
+                  </span>
+                </div>
+              `;
+            });
+            outputHTML += `</div>`;
+          }
+        }
+        
+        outputContainer.innerHTML = outputHTML;
+      }
+      
+      function displayFeedback(feedback) {
+        let feedbackHTML = `<div class="mb-2"><strong>Interviewer Feedback:</strong></div>`;
+        
+        feedbackHTML += `<div class="${feedback.success ? 'text-success' : 'text-danger'} mb-2">${feedback.message}</div>`;
+        
+        if (feedback.suggestions && feedback.suggestions.length > 0) {
+          feedbackHTML += `<div class="mt-2"><strong>Suggestions:</strong></div><ul>`;
+          feedback.suggestions.forEach(suggestion => {
+            feedbackHTML += `<li>${suggestion}</li>`;
+          });
+          feedbackHTML += `</ul>`;
+        }
+        
+        outputContainer.innerHTML = feedbackHTML;
+        
+        // Also add to transcript
+        addSystemMessage(`Received feedback on your code submission`);
+      }
     });
   </script>
 </body>
-</html>>
+</html>

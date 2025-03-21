@@ -1,15 +1,20 @@
 {
   "name": "interview-video-call",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "interview",
+    "video",
+    "webrtc",
+    "code-execution"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "A video interview platform with live code execution",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",

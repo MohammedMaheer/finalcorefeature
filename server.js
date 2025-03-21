@@ -1,8 +1,10 @@
+// server.js - Main server file
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const { executeCode, runTestCases } = require('./code-execution'); // Import code execution module
 
 const app = express();
 const server = http.createServer(app);
@@ -46,7 +48,11 @@ io.on('connection', (socket) => {
     
     // Initialize room if it doesn't exist
     if (!rooms[roomId]) {
-      rooms[roomId] = { users: [] };
+      rooms[roomId] = { 
+        users: [],
+        problems: [], // Store problems
+        submissions: [] // Store submissions
+      };
     }
     
     // Add user to room
@@ -100,6 +106,160 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('tab-switch-detected');
   });
 
+  // Coding environment events
+  socket.on('coding-problem', (roomId, problem) => {
+    console.log(`Coding problem sent to room ${roomId}`);
+    
+    // Store the problem in the room
+    if (rooms[roomId]) {
+      rooms[roomId].problems.push(problem);
+    }
+    
+    socket.to(roomId).emit('coding-problem', problem);
+  });
+
+  // Handle code execution requests
+  socket.on('run-code', async (roomId, data) => {
+    console.log(`Code run request in room ${roomId}`);
+    
+    try {
+      // Execute the code
+      const result = await executeCode(data.code, data.language);
+      
+      // Send result back to the requester
+      socket.emit('code-execution-result', result);
+      
+      // Also send to the interviewer if request came from candidate
+      if (socket.userData && socket.userData.userType === 'candidate') {
+        // Find interviewer in the room
+        const interviewers = rooms[roomId]?.users.filter(user => user.type === 'interviewer') || [];
+        
+        // Forward the code and result to all interviewers
+        interviewers.forEach(interviewer => {
+          io.to(interviewer.socketId).emit('run-code', {
+            ...data,
+            result
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Error executing code:', error);
+      socket.emit('code-execution-result', {
+        success: false,
+        error: 'Server error while executing code',
+        executionTime: 0
+      });
+    }
+  });
+
+  // Handle solution submissions with test cases
+  socket.on('submit-solution', async (roomId, data) => {
+    console.log(`Solution submitted in room ${roomId}`);
+    
+    try {
+      // Store the submission
+      if (rooms[roomId]) {
+        // Find the problem
+        const problem = rooms[roomId].problems.find(p => p.id === data.problemId);
+        
+        if (problem && problem.testCases && problem.testCases.length > 0) {
+          // Run test cases
+          const testResults = await runTestCases(data.code, data.language, problem.testCases);
+          
+          // Calculate success rate
+          const passedTests = testResults.filter(test => test.testPassed).length;
+          const totalTests = testResults.length;
+          
+          const result = {
+            success: passedTests === totalTests,
+            passedTests,
+            totalTests,
+            testResults,
+            executionTime: testResults.reduce((sum, test) => sum + (test.executionTime || 0), 0)
+          };
+          
+          // Store submission with results
+          rooms[roomId].submissions.push({
+            userId: data.userId,
+            problemId: data.problemId,
+            code: data.code,
+            language: data.language,
+            result,
+            timestamp: new Date()
+          });
+          
+          // Send result to the candidate
+          socket.emit('code-execution-result', {
+            success: result.success,
+            output: `Passed ${passedTests}/${totalTests} test cases`,
+            testResults: result.testResults,
+            executionTime: result.executionTime
+          });
+          
+          // Forward to interviewer
+          if (socket.userData && socket.userData.userType === 'candidate') {
+            // Find interviewer in the room
+            const interviewers = rooms[roomId]?.users.filter(user => user.type === 'interviewer') || [];
+            
+            // Forward the submission to all interviewers
+            interviewers.forEach(interviewer => {
+              io.to(interviewer.socketId).emit('submit-solution', {
+                ...data,
+                result
+              });
+            });
+          }
+        } else {
+          // If no test cases, just execute the code normally
+          const result = await executeCode(data.code, data.language);
+          
+          // Store submission
+          rooms[roomId].submissions.push({
+            userId: data.userId,
+            problemId: data.problemId,
+            code: data.code,
+            language: data.language,
+            result,
+            timestamp: new Date()
+          });
+          
+          // Send result to the candidate
+          socket.emit('code-execution-result', result);
+          
+          // Forward to interviewer
+          if (socket.userData && socket.userData.userType === 'candidate') {
+            // Find interviewer in the room
+            const interviewers = rooms[roomId]?.users.filter(user => user.type === 'interviewer') || [];
+            
+            // Forward the submission to all interviewers
+            interviewers.forEach(interviewer => {
+              io.to(interviewer.socketId).emit('submit-solution', {
+                ...data,
+                result
+              });
+            });
+          }
+        }
+      } else {
+        // Just execute the code and return the result
+        const result = await executeCode(data.code, data.language);
+        socket.emit('code-execution-result', result);
+      }
+    } catch (error) {
+      console.error('Error processing solution:', error);
+      socket.emit('code-execution-result', {
+        success: false,
+        error: 'Server error while processing solution',
+        executionTime: 0
+      });
+    }
+  });
+
+  socket.on('feedback', (roomId, feedback) => {
+    console.log(`Feedback sent to room ${roomId}`);
+    socket.to(roomId).emit('feedback', feedback);
+  });
+
   // Handle reconnection
   socket.on('reconnect-user', (roomId, userId, userType) => {
     console.log(`User ${userId} (${userType}) attempting to reconnect to room ${roomId}`);
@@ -133,7 +293,9 @@ io.on('connection', (socket) => {
           id: userId,
           socketId: socket.id,
           type: userType
-        }]
+        }],
+        problems: [],
+        submissions: []
       };
       socket.join(roomId);
       socket.userData = { roomId, userId, userType };
