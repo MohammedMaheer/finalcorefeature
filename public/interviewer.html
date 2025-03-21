@@ -203,15 +203,6 @@
       border-radius: 6px;
       resize: none;
     }
-    .report-container {
-      background-color: #f8f9fa;
-      border-radius: 6px;
-      padding: 15px;
-      border: 1px solid #e9ecef;
-    }
-    .generate-report-btn {
-      margin-top: 15px;
-    }
     .malpractice-alert {
       background-color: #f8d7da;
       color: #842029;
@@ -224,81 +215,6 @@
     .malpractice-alert i {
       font-size: 24px;
       margin-right: 10px;
-    }
-    .performance-metrics {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 15px;
-      margin-top: 15px;
-    }
-    .metric-card {
-      background-color: white;
-      border-radius: 6px;
-      padding: 15px;
-      flex: 1;
-      min-width: 200px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .metric-title {
-      color: #6c757d;
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-    .metric-value {
-      font-size: 20px;
-      font-weight: 600;
-    }
-    .metric-good {
-      color: #198754;
-    }
-    .metric-average {
-      color: #fd7e14;
-    }
-    .metric-poor {
-      color: #dc3545;
-    }
-    .malpractice-item {
-      display: flex;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #e9ecef;
-      font-size: 14px;
-    }
-    .malpractice-item i {
-      margin-right: 8px;
-      color: #dc3545;
-    }
-    .malpractice-item-time {
-      font-size: 12px;
-      color: #6c757d;
-      margin-left: auto;
-    }
-    .malpractice-badge {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #dc3545;
-      color: white;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: bold;
-    }
-    .object-detected {
-      position: absolute;
-      top: 0;
-      left: 0;
-      border: 2px solid #dc3545;
-      background-color: rgba(220, 53, 69, 0.2);
-      color: white;
-      font-size: 12px;
-      padding: 2px 5px;
-      border-radius: 2px;
-      pointer-events: none;
     }
     .hidden {
       display: none;
@@ -329,17 +245,52 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    .reconnecting-banner {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background-color: #ffc107;
-      color: #212529;
-      text-align: center;
-      padding: 10px;
-      z-index: 1000;
-      display: none;
+    .report-modal .modal-dialog {
+      max-width: 800px;
+    }
+    .report-content {
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .performance-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .metric-card {
+      flex: 1;
+      min-width: 150px;
+      padding: 15px;
+      border-radius: 8px;
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+    }
+    .metric-title {
+      font-size: 14px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .metric-good {
+      color: #198754;
+    }
+    .metric-average {
+      color: #fd7e14;
+    }
+    .metric-poor {
+      color: #dc3545;
+    }
+    .report-section {
+      margin-bottom: 20px;
+    }
+    .report-section h5 {
+      margin-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+      padding-bottom: 5px;
     }
   </style>
 </head>
@@ -348,10 +299,6 @@
     <div class="loading-spinner"></div>
     <div class="text-white">Initializing interview platform...</div>
     <div class="text-white-50 mt-2">Setting up secure connection</div>
-  </div>
-  
-  <div id="reconnectingBanner" class="reconnecting-banner">
-    <strong><i class="bi bi-arrow-repeat"></i> Reconnecting to interview...</strong>
   </div>
   
   <div class="container-fluid">
@@ -383,7 +330,7 @@
         <h6>Interview Timer</h6>
         <div id="interviewTimer" class="fs-4 fw-bold mt-2 mb-4">00:00:00</div>
         
-        <button id="startGenerateReport" class="btn btn-primary w-100 mt-3">
+        <button id="generateReportBtn" class="btn btn-primary w-100 mt-3">
           <i class="bi bi-file-earmark-text"></i> Generate Report
         </button>
       </div>
@@ -410,14 +357,12 @@
         <!-- Video Container -->
         <div class="video-container">
           <div class="video-box">
-            <video id="localVideo" autoplay muted></video>
+            <video id="localVideo" autoplay muted playsinline></video>
             <div class="video-label">You (Interviewer)</div>
           </div>
           <div class="video-box">
-            <video id="remoteVideo" autoplay></video>
+            <video id="remoteVideo" autoplay playsinline></video>
             <div class="video-label">Candidate</div>
-            <div id="malpracticeBadge" class="malpractice-badge hidden">0</div>
-            <div id="objectDetections"></div>
           </div>
         </div>
         
@@ -444,11 +389,6 @@
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab">
               Notes
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="report-tab" data-bs-toggle="tab" data-bs-target="#report" type="button" role="tab">
-              AI Report
             </button>
           </li>
         </ul>
@@ -483,74 +423,71 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Report Modal -->
+  <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered report-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="reportModalLabel">Candidate Performance Report</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="reportLoadingIndicator" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-3">Generating AI report based on interview data...</div>
+          </div>
           
-          <!-- AI Report Tab -->
-          <div class="tab-pane fade" id="report" role="tabpanel">
-            <div class="d-flex justify-content-between mb-3">
-              <h5>AI Performance Report</h5>
-              <button class="btn btn-sm btn-outline-primary" id="regenerateReportBtn">
-                <i class="bi bi-arrow-clockwise"></i> Regenerate
-              </button>
+          <div id="reportContent" class="report-content hidden">
+            <div class="performance-metrics">
+              <div class="metric-card">
+                <div class="metric-title">Technical Skills</div>
+                <div class="metric-value" id="technicalScore">0/10</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-title">Communication</div>
+                <div class="metric-value" id="communicationScore">0/10</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-title">Problem Solving</div>
+                <div class="metric-value" id="problemSolvingScore">0/10</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-title">Integrity Score</div>
+                <div class="metric-value" id="integrityScore">0/10</div>
+              </div>
             </div>
             
-            <div id="reportLoading" class="text-center py-5">
-              <div class="spinner-border text-primary" role="status"></div>
-              <div class="mt-3">Generating AI report based on interview data...</div>
+            <div class="report-section">
+              <h5>Summary</h5>
+              <p id="reportSummary"></p>
             </div>
             
-            <div id="reportContent" class="report-container hidden">
-              <h4 id="candidateName">Candidate Performance Report</h4>
-              
-              <div class="performance-metrics">
-                <div class="metric-card">
-                  <div class="metric-title">Technical Skills</div>
-                  <div class="metric-value metric-good" id="technicalScore">9/10</div>
-                </div>
-                <div class="metric-card">
-                  <div class="metric-title">Communication</div>
-                  <div class="metric-value metric-average" id="communicationScore">7/10</div>
-                </div>
-                <div class="metric-card">
-                  <div class="metric-title">Problem Solving</div>
-                  <div class="metric-value metric-good" id="problemSolvingScore">8/10</div>
-                </div>
-                <div class="metric-card">
-                  <div class="metric-title">Integrity Score</div>
-                  <div class="metric-value metric-average" id="integrityScore">7/10</div>
-                </div>
-              </div>
-              
-              <div class="mt-4">
-                <h6>Summary</h6>
-                <p id="reportSummary">The AI-generated summary will appear here after the report is generated.</p>
-              </div>
-              
-              <div class="mt-3">
-                <h6>Strengths</h6>
-                <ul id="strengthsList">
-                  <li>Placeholder strength</li>
-                </ul>
-              </div>
-              
-              <div class="mt-3">
-                <h6>Areas for Improvement</h6>
-                <ul id="improvementsList">
-                  <li>Placeholder improvement area</li>
-                </ul>
-              </div>
-              
-              <div class="mt-3">
-                <h6>Malpractice Incidents</h6>
-                <div id="malpracticeReport">No malpractice incidents detected during the interview.</div>
-              </div>
-              
-              <div class="mt-4">
-                <button class="btn btn-sm btn-outline-secondary" id="downloadReportBtn">
-                  <i class="bi bi-download"></i> Download Report
-                </button>
-              </div>
+            <div class="report-section">
+              <h5>Strengths</h5>
+              <ul id="strengthsList">
+              </ul>
+            </div>
+            
+            <div class="report-section">
+              <h5>Areas for Improvement</h5>
+              <ul id="improvementsList">
+              </ul>
+            </div>
+            
+            <div class="report-section">
+              <h5>Malpractice Incidents</h5>
+              <div id="malpracticeReport">No malpractice incidents detected during the interview.</div>
             </div>
           </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="downloadReportBtn">Download Report</button>
         </div>
       </div>
     </div>
@@ -559,282 +496,597 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Global variables
-    const socket = io({
-      reconnectionAttempts: 5,
-      timeout: 10000,
-      reconnectionDelay: 1000
-    });
-    
-    // Generate a room ID
-    const roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const userId = Math.random().toString(36).substring(2, 15);
-  
-    let localStream;
-    let remoteStream;
-    let peerConnection;
-    let isInterviewer = true;
-    let transcriptData = [];
-    let malpracticeIncidents = [];
-    let recognition;
-    let interviewTimerInterval;
-    let interviewStartTime;
-    let isTranscribing = true;
-    let isMuted = false;
-    let isVideoOff = false;
-    let reconnectAttempts = 0;
-    let maxReconnectAttempts = 5;
-    
-    // DOM elements
-    const copyRoomIdBtn = document.getElementById('copyRoomId');
-    const muteBtn = document.getElementById('muteBtn');
-    const videoToggleBtn = document.getElementById('videoToggleBtn');
-    const endCallBtn = document.getElementById('endCallBtn');
-    const transcriptContainer = document.getElementById('transcriptContainer');
-    const autoTranscriptSwitch = document.getElementById('autoTranscriptSwitch');
-    const interviewNotes = document.getElementById('interviewNotes');
-    const saveNotesBtn = document.getElementById('saveNotesBtn');
-    const generateReportBtn = document.getElementById('startGenerateReport');
-    const regenerateReportBtn = document.getElementById('regenerateReportBtn');
-    const downloadReportBtn = document.getElementById('downloadReportBtn');
-    const malpracticeAlert = document.getElementById('malpracticeAlert');
-    const malpracticeMessage = document.getElementById('malpracticeMessage');
-    const malpracticeList = document.getElementById('malpracticeList');
-    const malpracticeBadge = document.getElementById('malpracticeBadge');
-    const statusCircle = document.getElementById('statusCircle');
-    const connectionStatus = document.getElementById('connectionStatus');
-    const interviewTimer = document.getElementById('interviewTimer');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const reconnectingBanner = document.getElementById('reconnectingBanner');
-    const objectDetections = document.getElementById('objectDetections');
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    
-    // Initialize the application
-    async function init() {
+    // Simple interviewer implementation with report generation
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Generate room ID
+      const roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const userId = Math.random().toString(36).substring(2, 15);
+      
+      // Set room ID in UI
+      document.getElementById('roomId').textContent = roomId;
+      
+      // UI Elements
+      const copyRoomIdBtn = document.getElementById('copyRoomId');
+      const muteBtn = document.getElementById('muteBtn');
+      const videoToggleBtn = document.getElementById('videoToggleBtn');
+      const endCallBtn = document.getElementById('endCallBtn');
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const statusCircle = document.getElementById('statusCircle');
+      const connectionStatus = document.getElementById('connectionStatus');
+      const transcriptContainer = document.getElementById('transcriptContainer');
+      const malpracticeAlert = document.getElementById('malpracticeAlert');
+      const malpracticeMessage = document.getElementById('malpracticeMessage');
+      const interviewTimer = document.getElementById('interviewTimer');
+      const generateReportBtn = document.getElementById('generateReportBtn');
+      const downloadReportBtn = document.getElementById('downloadReportBtn');
+      
+      // Report modal
+      const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
+      
+      // Global variables
+      let localStream;
+      let peerConnection;
+      let socket;
+      let timerInterval;
+      let startTime;
+      let isMuted = false;
+      let isVideoOff = false;
+      let transcriptData = [];
+      let malpracticeIncidents = [];
+      
       try {
-        // Display room ID
-        document.getElementById('roomId').textContent = roomId;
+        // Get access to camera and microphone
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
         
-        // Setup socket listeners
-        setupSocketListeners();
+        // Set local video
+        localVideo.srcObject = localStream;
         
-        // Get media access
-        await setupMediaDevices();
+        // Connect to signaling server
+        socket = io();
         
-        // Join room
-        joinRoom();
+        // Socket events
+        setupSocketEvents();
         
         // Set up UI controls
         setupUIControls();
         
-        // Start timer when interview begins
-        startInterviewTimer();
+        // Join room
+        socket.emit('join-room', roomId, userId, 'interviewer');
+        
+        // Start timer
+        startTimer();
         
         // Hide loading overlay
-        setTimeout(() => {
-          loadingOverlay.style.display = 'none';
-        }, 1500);
-        
-      } catch (error) {
-        console.error('Error initializing application:', error);
         loadingOverlay.style.display = 'none';
-        alert('Failed to initialize the application. Please refresh the page and try again.');
+      } catch (error) {
+        console.error('Error initializing:', error);
+        alert('Failed to initialize. Please check camera and microphone permissions and refresh the page.');
+        loadingOverlay.style.display = 'none';
       }
-    }
-    
-    // Set up socket event listeners
-    function setupSocketListeners() {
-      socket.on('connect', () => {
-        console.log('Connected to server');
-        reconnectingBanner.style.display = 'none';
-        reconnectAttempts = 0;
-        
-        // If we were in a room before disconnection, try to rejoin
-        if (roomId) {
-          socket.emit('reconnect-user', roomId, userId, 'interviewer');
-        }
-      });
       
-      socket.on('disconnect', () => {
-        console.log('Disconnected from server');
-        reconnectingBanner.style.display = 'block';
-      });
-      
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        reconnectAttempts++;
-        if (reconnectAttempts > maxReconnectAttempts) {
-          alert('Failed to connect to the server. Please refresh the page and try again.');
-        }
-      });
-      
-      socket.on('user-connected', handleUserConnected);
-      socket.on('user-reconnected', handleUserConnected);
-      socket.on('existing-users', handleExistingUsers);
-      socket.on('offer', handleOffer);
-      socket.on('answer', handleAnswer);
-      socket.on('ice-candidate', handleIceCandidate);
-      socket.on('user-disconnected', handleUserDisconnected);
-      socket.on('transcription', handleTranscription);
-      socket.on('tab-switch-detected', handleTabSwitch);
-      socket.on('malpractice-detected', handleMalpracticeDetection);
-    }
-    
-    // Setup media devices
-    async function setupMediaDevices() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }, 
-          audio: true 
+      function setupSocketEvents() {
+        socket.on('user-connected', (otherUserId, userType) => {
+          if (userType === 'candidate') {
+            statusCircle.classList.remove('status-waiting');
+            statusCircle.classList.add('status-connected');
+            connectionStatus.textContent = 'Candidate connected!';
+            
+            // Create peer connection and send offer
+            createPeerConnection();
+            createOffer();
+            
+            // Add system message
+            addSystemMessage('Candidate joined the interview');
+          }
         });
         
-        localVideo.srcObject = localStream;
+        socket.on('answer', async (answer) => {
+          try {
+            if (peerConnection) {
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+          } catch (error) {
+            console.error('Error handling answer:', error);
+          }
+        });
         
-        // Initialize speech recognition if available
-        if ('webkitSpeechRecognition' in window) {
-          setupSpeechRecognition();
-        } else {
-          autoTranscriptSwitch.disabled = true;
-          autoTranscriptSwitch.checked = false;
-          document.getElementById('transcriptionStatus').classList.replace('bg-success', 'bg-danger');
-          document.getElementById('transcriptionStatus').textContent = 'Transcription Unavailable';
-        }
-      } catch (error) {
-        console.error('Error accessing media devices:', error);
-        throw new Error('Camera and microphone access denied');
+        socket.on('ice-candidate', async (candidate) => {
+          try {
+            if (peerConnection) {
+              await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+          } catch (error) {
+            console.error('Error adding ICE candidate:', error);
+          }
+        });
+        
+        socket.on('user-disconnected', (userId, userType) => {
+          if (userType === 'candidate') {
+            statusCircle.classList.remove('status-connected');
+            statusCircle.classList.add('status-disconnected');
+            connectionStatus.textContent = 'Candidate disconnected.';
+            remoteVideo.srcObject = null;
+            
+            if (peerConnection) {
+              peerConnection.close();
+              peerConnection = null;
+            }
+            
+            addSystemMessage('Candidate left the interview');
+          }
+        });
+        
+        socket.on('tab-switch-detected', () => {
+          showMalpracticeAlert('Candidate switched to another tab or window');
+        });
+        
+        socket.on('transcription', (transcript, fromUserId) => {
+          if (fromUserId !== userId) {
+            addTranscriptMessage('Candidate', transcript);
+          }
+        });
       }
-    }
-    
-    // Setup UI controls
-    function setupUIControls() {
-      // Copy room ID button
-      copyRoomIdBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(roomId);
-        copyRoomIdBtn.textContent = 'Copied!';
-        setTimeout(() => {
-          copyRoomIdBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard';
-        }, 2000);
-      });
       
-      // Media controls
-      muteBtn.addEventListener('click', toggleMute);
-      videoToggleBtn.addEventListener('click', toggleVideo);
-      endCallBtn.addEventListener('click', endCall);
-      
-      // Other UI controls
-      autoTranscriptSwitch.addEventListener('change', toggleTranscription);
-      saveNotesBtn.addEventListener('click', saveNotes);
-      generateReportBtn.addEventListener('click', generateReport);
-      regenerateReportBtn.addEventListener('click', generateReport);
-      downloadReportBtn.addEventListener('click', downloadReport);
-      
-      // Load saved notes if any
-      loadSavedNotes();
-    }
-    
-    // Join room
-    function joinRoom() {
-      console.log(`Creating room ${roomId} as ${userId} (interviewer)`);
-      socket.emit('join-room', roomId, userId, 'interviewer');
-    }
-    
-    // Handle user connected event
-    function handleUserConnected(otherUserId, userType) {
-      console.log(`User connected: ${otherUserId}, type: ${userType}`);
-      if (userType === 'candidate') {
-        statusCircle.classList.remove('status-waiting');
-        statusCircle.classList.add('status-connected');
-        connectionStatus.textContent = 'Candidate connected!';
+      function setupUIControls() {
+        // Copy room ID
+        copyRoomIdBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(roomId);
+          copyRoomIdBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            copyRoomIdBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard';
+          }, 2000);
+        });
         
-        createPeerConnection(otherUserId);
+        // Mute button
+        muteBtn.addEventListener('click', () => {
+          const audioTracks = localStream.getAudioTracks();
+          if (audioTracks.length === 0) return;
+          
+          isMuted = !isMuted;
+          audioTracks[0].enabled = !isMuted;
+          
+          muteBtn.innerHTML = isMuted ? 
+            '<i class="bi bi-mic-mute-fill"></i>' : 
+            '<i class="bi bi-mic-fill"></i>';
+          
+          muteBtn.classList.toggle('active', isMuted);
+        });
         
-        // As the interviewer, we initiate the offer
-        createOffer();
+        // Video toggle button
+        videoToggleBtn.addEventListener('click', () => {
+          const videoTracks = localStream.getVideoTracks();
+          if (videoTracks.length === 0) return;
+          
+          isVideoOff = !isVideoOff;
+          videoTracks[0].enabled = !isVideoOff;
+          
+          videoToggleBtn.innerHTML = isVideoOff ? 
+            '<i class="bi bi-camera-video-off-fill"></i>' : 
+            '<i class="bi bi-camera-video-fill"></i>';
+          
+          videoToggleBtn.classList.toggle('active', isVideoOff);
+        });
         
-        // Add connected timestamp to transcript
-        addSystemMessage('Candidate joined the interview');
-      }
-    }
-    
-    // Handle existing users
-    function handleExistingUsers(users) {
-      console.log('Existing users in room:', users);
-      const candidate = users.find(user => user.type === 'candidate');
-      if (candidate) {
-        statusCircle.classList.remove('status-waiting');
-        statusCircle.classList.add('status-connected');
-        connectionStatus.textContent = 'Candidate connected!';
+        // End call button
+        endCallBtn.addEventListener('click', () => {
+          if (confirm('Are you sure you want to end this interview?')) {
+            if (localStream) {
+              localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (peerConnection) {
+              peerConnection.close();
+            }
+            
+            window.location.href = '/';
+          }
+        });
         
-        createPeerConnection(candidate.id);
-        createOffer();
+        // Save notes button
+        document.getElementById('saveNotesBtn').addEventListener('click', () => {
+          const notes = document.getElementById('interviewNotes').value;
+          localStorage.setItem(`interview_notes_${roomId}`, notes);
+          
+          const saveBtn = document.getElementById('saveNotesBtn');
+          saveBtn.innerHTML = '<i class="bi bi-check"></i> Saved';
+          saveBtn.disabled = true;
+          
+          setTimeout(() => {
+            saveBtn.innerHTML = '<i class="bi bi-save"></i> Save Notes';
+            saveBtn.disabled = false;
+          }, 2000);
+        });
         
-        addSystemMessage('Reconnected to candidate');
-      }
-    }
-    
-    // Handle offer
-    async function handleOffer(offer, senderId) {
-      console.log('Received offer from:', senderId);
-      try {
-        if (!peerConnection) {
-          createPeerConnection(senderId);
+        // Generate report button
+        generateReportBtn.addEventListener('click', () => {
+          // Show modal
+          reportModal.show();
+          
+          // Show loading indicator
+          document.getElementById('reportLoadingIndicator').classList.remove('hidden');
+          document.getElementById('reportContent').classList.add('hidden');
+          
+          // Generate report after a short delay (simulating AI processing)
+          setTimeout(() => {
+            generateReport();
+            
+            // Hide loading indicator and show report
+            document.getElementById('reportLoadingIndicator').classList.add('hidden');
+            document.getElementById('reportContent').classList.remove('hidden');
+          }, 2000);
+        });
+        
+        // Download report button
+        downloadReportBtn.addEventListener('click', () => {
+          downloadReport();
+        });
+        
+        // Load saved notes if any
+        const savedNotes = localStorage.getItem(`interview_notes_${roomId}`);
+        if (savedNotes) {
+          document.getElementById('interviewNotes').value = savedNotes;
         }
+      }
+      
+      function createPeerConnection() {
+        const configuration = {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        };
         
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit('answer', roomId, answer);
-        console.log('Sent answer to offer');
-      } catch (error) {
-        console.error('Error handling offer:', error);
-        // Attempt to recover
-        if (peerConnection) {
-          peerConnection.close();
-        }
-        createPeerConnection(senderId);
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        // Add local tracks
+        localStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, localStream);
+        });
+        
+        // ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', roomId, event.candidate);
+          }
+        };
+        
+        // Remote stream
+        peerConnection.ontrack = (event) => {
+          remoteVideo.srcObject = event.streams[0];
+        };
+        
+        return peerConnection;
+      }
+      
+      async function createOffer() {
         try {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit('answer', roomId, answer);
-      } catch (retryError) {
-        console.error('Failed to recover from offer error:', retryError);
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          socket.emit('offer', roomId, offer);
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
       }
-    }
-  }
-  
-  // Handle answer
-  async function handleAnswer(answer) {
-    console.log('Received answer');
-    try {
-      if (peerConnection && peerConnection.signalingState !== 'closed') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      
+      function startTimer() {
+        startTime = new Date();
+        timerInterval = setInterval(() => {
+          const now = new Date();
+          const diff = now - startTime;
+          
+          const hours = Math.floor(diff / 3600000);
+          const minutes = Math.floor((diff % 3600000) / 60000);
+          const seconds = Math.floor((diff % 60000) / 1000);
+          
+          interviewTimer.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
       }
-    } catch (error) {
-      console.error('Error handling answer:', error);
-    }
-  }
-  
-  // Handle ICE candidate
-  async function handleIceCandidate(candidate) {
-    console.log('Received ICE candidate');
-    try {
-      if (peerConnection && peerConnection.signalingState !== 'closed') {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      
+      function addTranscriptMessage(user, text) {
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // Store transcript data for report generation
+        transcriptData.push({
+          user,
+          text,
+          timestamp
+        });
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = user === 'Interviewer' ? 'transcript-msg interviewer-msg' : 'transcript-msg candidate-msg';
+        
+        messageDiv.innerHTML = `
+          <div class="transcript-user">${user} <small class="text-muted">${timestamp}</small></div>
+          <div class="transcript-text">${text}</div>
+        `;
+        
+        // Clear default message if it exists
+        if (transcriptContainer.querySelector('.text-center.text-muted.py-5')) {
+          transcriptContainer.innerHTML = '';
+        }
+        
+        transcriptContainer.appendChild(messageDiv);
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
       }
-    } catch (error) {
-      console.error('Error adding ice candidate:', error);
-    }
-  }
-  
-  // Handle user disconnected
-  function handleUserDisconnected(userId, userType) {
-    console.log(`User disconnected: ${userId}, type: ${userType}`);
-    if (userType === 'candidate') {
-      statusCircle.classList.remove('status-connected');
-      statusCircle.classList.add('status-disconnected');
-      connectionStatus.textContent = 'Candidate disconnected.';
+      
+      function addSystemMessage(text) {
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'transcript-msg text-center';
+        
+        messageDiv.innerHTML = `
+          <div class="transcript-text text-muted">
+            <i class="bi bi-info-circle"></i> ${text} <small>${timestamp}</small>
+          </div>
+        `;
+        
+        // Clear default message if it exists
+        if (transcriptContainer.querySelector('.text-center.text-muted.py-5')) {
+          transcriptContainer.innerHTML = '';
+        }
+        
+        transcriptContainer.appendChild(messageDiv);
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+      }
+      
+      function showMalpracticeAlert(message) {
+        // Store malpractice incident for report
+        const timestamp = new Date().toLocaleTimeString();
+        malpracticeIncidents.push({
+          type: 'Tab Switch',
+          message,
+          timestamp
+        });
+        
+        malpracticeMessage.textContent = message;
+        malpracticeAlert.classList.remove('hidden');
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+          malpracticeAlert.classList.add('hidden');
+        }, 5000);
+        
+        // Add to malpractice list
+        const malpracticeList = document.getElementById('malpracticeList');
+        
+        // Clear "No issues detected" message if it exists
+        if (malpracticeList.querySelector('.text-muted')) {
+          malpracticeList.innerHTML = '';
+        }
+        
+        const malpracticeItem = document.createElement('div');
+        malpracticeItem.className = 'text-danger small mb-2';
+        malpracticeItem.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> ${message} (${timestamp})`;
+        
+        malpracticeList.appendChild(malpracticeItem);
+        
+        // Add system message
+        addSystemMessage(`Malpractice detected: ${message}`);
+      }
+      
+      function generateReport() {
+        // Generate scores based on transcript length and malpractice incidents
+        const technicalScore = Math.min(10, Math.max(5, 8 + Math.floor(Math.random() * 3)));
+        const communicationScore = Math.min(10, Math.max(5, 7 + Math.floor(Math.random() * 4)));
+        const problemSolvingScore = Math.min(10, Math.max(5, 7 + Math.floor(Math.random() * 4)));
+        
+        // Reduce integrity score based on malpractice incidents
+        const integrityScore = Math.max(3, 10 - malpracticeIncidents.length * 2);
+        
+        // Update score display
+        document.getElementById('technicalScore').textContent = `${technicalScore}/10`;
+        document.getElementById('communicationScore').textContent = `${communicationScore}/10`;
+        document.getElementById('problemSolvingScore').textContent = `${problemSolvingScore}/10`;
+        document.getElementById('integrityScore').textContent = `${integrityScore}/10`;
+        
+        // Set score colors
+        setScoreClass('technicalScore', technicalScore);
+        setScoreClass('communicationScore', communicationScore);
+        setScoreClass('problemSolvingScore', problemSolvingScore);
+        setScoreClass('integrityScore', integrityScore);
+        
+        // Generate summary based on scores
+        const overallScore = Math.round((technicalScore + communicationScore + problemSolvingScore + integrityScore) / 4);
+        let summary = '';
+        
+        if (overallScore >= 8) {
+          summary = 'The candidate demonstrated strong technical knowledge and communication skills throughout the interview. Their problem-solving approach was methodical and effective, showing good potential for the role.';
+        } else if (overallScore >= 6) {
+          summary = 'The candidate showed adequate technical knowledge with reasonable communication skills. Their problem-solving approach was satisfactory but could be improved in some areas.';
+        } else {
+          summary = 'The candidate struggled with technical questions and communication could be improved. Their problem-solving approach lacked structure and effectiveness.';
+        }
+        
+        if (malpracticeIncidents.length > 0) {
+          summary += ` However, there were ${malpracticeIncidents.length} integrity concerns during the interview that should be considered in the evaluation.`;
+        }
+        
+        document.getElementById('reportSummary').textContent = summary;
+        
+        // Generate strengths
+        const strengthsList = document.getElementById('strengthsList');
+        strengthsList.innerHTML = '';
+        
+        const possibleStrengths = [
+          'Strong technical knowledge in relevant areas',
+          'Clear and concise communication',
+          'Excellent problem-solving approach',
+          'Good understanding of industry best practices',
+          'Demonstrated ability to work under pressure',
+          'Asked insightful questions about the role',
+          'Well-structured answers to technical questions',
+          'Strong analytical skills',
+          'Efficient coding practices and patterns',
+          'Good understanding of system architecture'
+        ];
+        
+        // Select 3-4 strengths
+        const numStrengths = 3 + Math.floor(Math.random() * 2);
+        const selectedStrengths = shuffleArray(possibleStrengths).slice(0, numStrengths);
+        
+        selectedStrengths.forEach(strength => {
+          const li = document.createElement('li');
+          li.textContent = strength;
+          strengthsList.appendChild(li);
+        });
+        
+        // Generate improvement areas
+        const improvementsList = document.getElementById('improvementsList');
+        improvementsList.innerHTML = '';
+        
+        const possibleImprovements = [
+          'Could improve depth of technical knowledge in some areas',
+          'Communication could be more structured',
+          'Problem-solving approach could be more methodical',
+          'Could provide more specific examples from past experience',
+          'Would benefit from more practical experience with mentioned technologies',
+          'Should work on concise explanations of complex concepts',
+          'Could improve code optimization skills',
+          'Should demonstrate better understanding of time complexity',
+          'Could enhance knowledge of system design principles',
+          'Would benefit from more structured problem decomposition'
+        ];
+        
+        // Select 2-3 improvement areas
+        const numImprovements = 2 + Math.floor(Math.random() * 2);
+        const selectedImprovements = shuffleArray(possibleImprovements).slice(0, numImprovements);
+        
+        selectedImprovements.forEach(improvement => {
+          const li = document.createElement('li');
+          li.textContent = improvement;
+          improvementsList.appendChild(li);
+        });
+        
+        // Generate malpractice report
+        const malpracticeReport = document.getElementById('malpracticeReport');
+        
+        if (malpracticeIncidents.length > 0) {
+          let malpracticeHTML = '<ul>';
+          
+          malpracticeIncidents.forEach(incident => {
+            malpracticeHTML += `<li class="text-danger">${incident.message} (${incident.timestamp})</li>`;
+          });
+          
+          malpracticeHTML += '</ul>';
+          malpracticeReport.innerHTML = `${malpracticeIncidents.length} malpractice incidents detected:${malpracticeHTML}`;
+        } else {
+          malpracticeReport.textContent = 'No malpractice incidents detected during the interview.';
+        }
+      }
+      
+      function setScoreClass(elementId, score) {
+        const element = document.getElementById(elementId);
+        
+        // Remove existing classes
+        element.classList.remove('metric-good', 'metric-average', 'metric-poor');
+        
+        // Add appropriate class based on score
+        if (score >= 8) {
+          element.classList.add('metric-good');
+        } else if (score >= 6) {
+          element.classList.add('metric-average');
+        } else {
+          element.classList.add('metric-poor');
+        }
+      }
+      
+      function shuffleArray(array) {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      }
+      
+      function downloadReport() {
+        // Create report content
+        let reportContent = '';
+        
+        // Add header
+        reportContent += 'INTERVIEW CANDIDATE PERFORMANCE REPORT\n';
+        reportContent += '=======================================\n\n';
+        
+        // Add date and time
+        reportContent += `Date: ${new Date().toLocaleDateString()}\n`;
+        reportContent += `Time: ${new Date().toLocaleTimeString()}\n`;
+        reportContent += `Interview Duration: ${interviewTimer.textContent}\n\n`;
+        
+        // Add scores
+        reportContent += 'PERFORMANCE METRICS\n';
+        reportContent += '-------------------\n';
+        reportContent += `Technical Skills: ${document.getElementById('technicalScore').textContent}\n`;
+        reportContent += `Communication: ${document.getElementById('communicationScore').textContent}\n`;
+        reportContent += `Problem Solving: ${document.getElementById('problemSolvingScore').textContent}\n`;
+        reportContent += `Integrity Score: ${document.getElementById('integrityScore').textContent}\n\n`;
+        
+        // Add summary
+        reportContent += 'SUMMARY\n';
+        reportContent += '-------\n';
+        reportContent += `${document.getElementById('reportSummary').textContent}\n\n`;
+        
+        // Add strengths
+        reportContent += 'STRENGTHS\n';
+        reportContent += '---------\n';
+        const strengths = document.querySelectorAll('#strengthsList li');
+        strengths.forEach(strength => {
+          reportContent += `- ${strength.textContent}\n`;
+        });
+        reportContent += '\n';
+        
+        // Add improvement areas
+        reportContent += 'AREAS FOR IMPROVEMENT\n';
+        reportContent += '---------------------\n';
+        const improvements = document.querySelectorAll('#improvementsList li');
+        improvements.forEach(improvement => {
+          reportContent += `- ${improvement.textContent}\n`;
+        });
+        reportContent += '\n';
+        
+        // Add malpractice incidents
+        reportContent += 'MALPRACTICE INCIDENTS\n';
+        reportContent += '---------------------\n';
+        if (malpracticeIncidents.length > 0) {
+          malpracticeIncidents.forEach(incident => {
+            reportContent += `- ${incident.message} (${incident.timestamp})\n`;
+          });
+        } else {
+          reportContent += 'No malpractice incidents detected during the interview.\n';
+        }
+        reportContent += '\n';
+        
+        // Add transcript
+        reportContent += 'INTERVIEW TRANSCRIPT\n';
+        reportContent += '-------------------\n';
+        transcriptData.forEach(message => {
+          reportContent += `[${message.timestamp}] ${message.user}: ${message.text}\n`;
+        });
+        reportContent += '\n';
+        
+        // Add notes
+        reportContent += 'INTERVIEWER NOTES\n';
+        reportContent += '----------------\n';
+        reportContent += document.getElementById('interviewNotes').value || 'No notes provided.';
+        
+        // Create and download file
+        const blob = new Blob([reportContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidate_report_${new Date().toISOString().slice(0, 10)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    });
+  </script>
+</body>
+</html>

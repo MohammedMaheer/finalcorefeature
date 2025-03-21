@@ -55,15 +55,6 @@
       display: block;
       object-fit: cover;
     }
-    #canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 300px;
-      z-index: 10;
-      display: none;
-    }
     .controls {
       background-color: white;
       border-radius: 10px;
@@ -159,6 +150,9 @@
     .candidate-msg .transcript-user {
       color: #6c757d;
     }
+    .transcript-text {
+      color: #212529;
+    }
     .notification {
       position: fixed;
       top: 20px;
@@ -215,29 +209,13 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    .reconnecting-banner {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background-color: #ffc107;
-      color: #212529;
-      text-align: center;
-      padding: 10px;
-      z-index: 1000;
-      display: none;
-    }
   </style>
 </head>
 <body>
   <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-spinner"></div>
     <div class="text-white">Loading interview platform...</div>
-    <div class="text-white-50 mt-2">Please wait while we initialize the system</div>
-  </div>
-  
-  <div id="reconnectingBanner" class="reconnecting-banner">
-    <strong><i class="bi bi-arrow-repeat"></i> Reconnecting to interview...</strong>
+    <div class="text-white-50 mt-2">Please wait while we set up your connection</div>
   </div>
   
   <div class="container">
@@ -268,12 +246,11 @@
       <div class="video-container">
         <div class="video-box">
           <h3>You (Candidate)</h3>
-          <video id="localVideo" autoplay muted></video>
-          <canvas id="canvas"></canvas>
+          <video id="localVideo" autoplay muted playsinline></video>
         </div>
         <div class="video-box">
           <h3>Interviewer</h3>
-          <video id="remoteVideo" autoplay></video>
+          <video id="remoteVideo" autoplay playsinline></video>
         </div>
       </div>
       
@@ -316,709 +293,370 @@
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
-  <!-- TensorFlow.js and COCO-SSD Model -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script>
-    // Global variables
-    const socket = io({
-      reconnectionAttempts: 5,
-      timeout: 10000,
-      reconnectionDelay: 1000
-    });
-    
-    let localStream;
-    let remoteStream;
-    let peerConnection;
-    let userId = Math.random().toString(36).substring(2, 15);
-    let roomId;
-    let recognition;
-    let isTranscribing = true;
-    let transcriptData = [];
-    let isMuted = false;
-    let isVideoOff = false;
-    let reconnectAttempts = 0;
-    let maxReconnectAttempts = 5;
-    let objectDetectionModel;
-    let isModelLoaded = false;
-    let detectionInterval;
-    let lastDetectedObjects = [];
-    
-    // Configuration
-    const iceServers = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
-      ]
-    };
-    
-    // HTML elements
-    const joinBtn = document.getElementById('joinBtn');
-    const roomIdInput = document.getElementById('roomIdInput');
-    const joinForm = document.getElementById('joinForm');
-    const interviewArea = document.getElementById('interviewArea');
-    const statusIndicator = document.getElementById('statusIndicator');
-    const connectionStatus = document.getElementById('connectionStatus');
-    const muteBtn = document.getElementById('muteBtn');
-    const videoToggleBtn = document.getElementById('videoToggleBtn');
-    const leaveBtn = document.getElementById('leaveBtn');
-    const autoTranscriptSwitch = document.getElementById('autoTranscriptSwitch');
-    const transcriptContainer = document.getElementById('transcriptContainer');
-    const tabSwitchNotification = document.getElementById('tabSwitchNotification');
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const reconnectingBanner = document.getElementById('reconnectingBanner');
-    const canvas = document.getElementById('canvas');
-    
-    // Initialize TensorFlow COCO-SSD model
-    async function loadObjectDetectionModel() {
-      try {
-        objectDetectionModel = await cocoSsd.load();
-        console.log('Object detection model loaded');
-        isModelLoaded = true;
-      } catch (error) {
-        console.error('Error loading object detection model:', error);
-      }
-    }
-    
-    // Start object detection on local video
-    function startObjectDetection() {
-      if (!isModelLoaded || !localStream) return;
+    // Simple candidate implementation without YOLO
+    document.addEventListener('DOMContentLoaded', function() {
+      // Elements
+      const joinBtn = document.getElementById('joinBtn');
+      const roomIdInput = document.getElementById('roomIdInput');
+      const joinForm = document.getElementById('joinForm');
+      const interviewArea = document.getElementById('interviewArea');
+      const statusIndicator = document.getElementById('statusIndicator');
+      const connectionStatus = document.getElementById('connectionStatus');
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+      const muteBtn = document.getElementById('muteBtn');
+      const videoToggleBtn = document.getElementById('videoToggleBtn');
+      const leaveBtn = document.getElementById('leaveBtn');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const tabSwitchNotification = document.getElementById('tabSwitchNotification');
+      const transcriptContainer = document.getElementById('transcriptContainer');
+      const autoTranscriptSwitch = document.getElementById('autoTranscriptSwitch');
       
-      const ctx = canvas.getContext('2d');
+      // Variables
+      let userId = Math.random().toString(36).substring(2, 15);
+      let roomId;
+      let socket;
+      let localStream;
+      let peerConnection;
+      let recognition;
+      let isMuted = false;
+      let isVideoOff = false;
       
-      detectionInterval = setInterval(async () => {
-        if (document.hidden || !isModelLoaded || isVideoOff) return;
+      // Hide loading overlay
+      loadingOverlay.style.display = 'none';
+      
+      // Join button click handler
+      joinBtn.addEventListener('click', async function() {
+        roomId = roomIdInput.value.trim().toUpperCase();
         
-        try {
-          const predictions = await objectDetectionModel.detect(localVideo);
-          
-          // Clear previous drawings
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Check for relevant objects
-          const relevantObjects = predictions.filter(prediction => {
-            const relevantClasses = ['cell phone', 'book', 'laptop', 'person', 'remote'];
-            return relevantClasses.includes(prediction.class);
-          });
-          
-          // If we found new objects that weren't previously detected
-          const newObjects = relevantObjects.filter(obj => 
-            !lastDetectedObjects.some(lastObj => lastObj.class === obj.class)
-          );
-          
-          if (newObjects.length > 0) {
-            // Report to interviewer
-            newObjects.forEach(obj => {
-              const malpracticeData = {
-                type: 'Object Detected',
-                object: obj.class,
-                confidence: obj.score.toFixed(2),
-                timestamp: new Date().toISOString()
-              };
-              
-              socket.emit('malpractice', roomId, malpracticeData);
-              console.log(`Malpractice reported: ${obj.class} detected`);
-            });
-          }
-          
-          // Update last detected objects
-          lastDetectedObjects = relevantObjects;
-          
-        } catch (error) {
-          console.error('Error during object detection:', error);
+        if (!roomId) {
+          alert('Please enter a valid Room ID to join the interview.');
+          return;
         }
-      }, 2000); // Check every 2 seconds
-    }
-    
-    // Initialize the application
-    async function init() {
-      try {
-        // Load ML model in parallel
-        loadObjectDetectionModel();
         
-        // Add socket event listeners
-        setupSocketListeners();
-        
-        // Hide loading overlay
-        setTimeout(() => {
-          loadingOverlay.style.display = 'none';
-        }, 1500);
-      } catch (error) {
-        console.error('Error initializing application:', error);
-        alert('Failed to initialize the application. Please refresh the page and try again.');
-      }
-    }
-    
-    // Setup socket event listeners
-    function setupSocketListeners() {
-      socket.on('connect', () => {
-        console.log('Connected to server');
-        reconnectingBanner.style.display = 'none';
-        reconnectAttempts = 0;
-        
-        // If we were in a room before disconnection, try to rejoin
-        if (roomId) {
-          socket.emit('reconnect-user', roomId, userId, 'candidate');
-        }
-      });
-      
-      socket.on('disconnect', () => {
-        console.log('Disconnected from server');
-        reconnectingBanner.style.display = 'block';
-      });
-      
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        reconnectAttempts++;
-        if (reconnectAttempts > maxReconnectAttempts) {
-          alert('Failed to connect to the server. Please refresh the page and try again.');
-        }
-      });
-      
-      socket.on('user-connected', handleUserConnected);
-      socket.on('user-reconnected', handleUserConnected);
-      socket.on('existing-users', handleExistingUsers);
-      socket.on('offer', handleOffer);
-      socket.on('answer', handleAnswer);
-      socket.on('ice-candidate', handleIceCandidate);
-      socket.on('user-disconnected', handleUserDisconnected);
-      socket.on('transcription', handleTranscription);
-    }
-    
-    // Join button click handler
-    joinBtn.addEventListener('click', async () => {
-      roomId = roomIdInput.value.trim().toUpperCase();
-      
-      if (!roomId) {
-        alert('Please enter a valid Room ID to join the interview.');
-        return;
-      }
-      
-      try {
+        // Show loading overlay
         loadingOverlay.style.display = 'flex';
         loadingOverlay.querySelector('div:nth-child(2)').textContent = 'Accessing camera and microphone...';
         
-        // Request camera and microphone access
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user'
-          }, 
-          audio: true 
-        });
-        
-        // Set up local video
-        localVideo.srcObject = localStream;
-        
-        // Wait for video to be loaded
-        await new Promise(resolve => {
-          localVideo.onloadedmetadata = resolve;
-        });
-        
-        // Adjust canvas size to match video dimensions
-        canvas.width = localVideo.videoWidth;
-        canvas.height = localVideo.videoHeight;
-        
-        // Hide join form and show interview area
-        joinForm.classList.add('hidden');
-        interviewArea.classList.remove('hidden');
-        
-        // Initialize speech recognition if available
-        if ('webkitSpeechRecognition' in window) {
-          setupSpeechRecognition();
-        } else {
-          autoTranscriptSwitch.disabled = true;
-          autoTranscriptSwitch.checked = false;
-        }
-        
-        // Start object detection if model is loaded
-        if (isModelLoaded) {
-          startObjectDetection();
-        } else {
-          // Wait for model to load then start detection
-          const checkModelInterval = setInterval(() => {
-            if (isModelLoaded) {
-              startObjectDetection();
-              clearInterval(checkModelInterval);
-            }
-          }, 1000);
-        }
-        
-        // Join the room
-        joinRoom();
-        
-        // Set up UI controls
-        muteBtn.addEventListener('click', toggleMute);
-        videoToggleBtn.addEventListener('click', toggleVideo);
-        leaveBtn.addEventListener('click', leaveInterview);
-        autoTranscriptSwitch.addEventListener('change', toggleTranscription);
-        
-        // Setup visibility change detection to detect tab switching
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        
-        // Hide loading overlay
-        loadingOverlay.style.display = 'none';
-        
-      } catch (error) {
-        console.error('Error accessing media devices:', error);
-        loadingOverlay.style.display = 'none';
-        alert('Failed to access camera and microphone. Please ensure they are connected and permissions are granted.');
-      }
-    });
-    
-    // Join room
-    function joinRoom() {
-      console.log(`Joining room ${roomId} as ${userId} (candidate)`);
-      socket.emit('join-room', roomId, userId, 'candidate');
-    }
-    
-    // Handle user connected event
-    function handleUserConnected(otherUserId, userType) {
-      console.log(`User connected: ${otherUserId}, type: ${userType}`);
-      if (userType === 'interviewer') {
-        statusIndicator.classList.remove('status-connecting');
-        statusIndicator.classList.add('status-connected');
-        connectionStatus.textContent = 'Connected to interviewer!';
-        addSystemMessage('Connected to interviewer');
-        
-        // Create peer connection with interviewer
-        createPeerConnection(otherUserId);
-      }
-    }
-    
-    // Handle existing users
-    function handleExistingUsers(users) {
-      console.log('Existing users in room:', users);
-      const interviewer = users.find(user => user.type === 'interviewer');
-      if (interviewer) {
-        statusIndicator.classList.remove('status-connecting');
-        statusIndicator.classList.add('status-connected');
-        connectionStatus.textContent = 'Connected to interviewer!';
-        addSystemMessage('Connected to interviewer');
-        
-        // Create peer connection with interviewer
-        createPeerConnection(interviewer.id);
-      }
-    }
-    
-    // Handle offer
-    async function handleOffer(offer, senderId) {
-      console.log('Received offer from:', senderId);
-      try {
-        if (!peerConnection) {
-          createPeerConnection(senderId);
-        }
-        
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit('answer', roomId, answer);
-        console.log('Sent answer to offer');
-      } catch (error) {
-        console.error('Error handling offer:', error);
-        // Attempt to recover by recreating the peer connection
-        if (peerConnection) {
-          peerConnection.close();
-        }
-        createPeerConnection(senderId);
-        
         try {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          socket.emit('answer', roomId, answer);
-        } catch (retryError) {
-          console.error('Failed to recover from offer error:', retryError);
+          // Get camera and microphone access
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+          });
+          
+          // Set up local video
+          localVideo.srcObject = localStream;
+          
+          // Connect to signaling server
+          socket = io();
+          
+          // Socket events
+          setupSocketEvents();
+          
+          // Initialize WebSpeech API if available
+          setupSpeechRecognition();
+          
+          // Set up UI controls
+          setupUIControls();
+          
+          // Join room
+          socket.emit('join-room', roomId, userId, 'candidate');
+          
+          // Hide join form, show interview area
+          joinForm.classList.add('hidden');
+          interviewArea.classList.remove('hidden');
+          
+          // Set up tab switch detection
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          
+          // Hide loading overlay
+          loadingOverlay.style.display = 'none';
+        } catch (error) {
+          console.error('Initialization error:', error);
+          alert('Failed to access camera and microphone. Please ensure they are connected and permissions are granted.');
+          loadingOverlay.style.display = 'none';
         }
-      }
-    }
-    
-    // Handle answer
-    async function handleAnswer(answer) {
-      console.log('Received answer');
-      try {
-        if (peerConnection && peerConnection.signalingState !== 'closed') {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      } catch (error) {
-        console.error('Error handling answer:', error);
-      }
-    }
-    
-    // Handle ICE candidate
-    async function handleIceCandidate(candidate) {
-      console.log('Received ICE candidate');
-      try {
-        if (peerConnection && peerConnection.signalingState !== 'closed') {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-      } catch (error) {
-        console.error('Error adding ice candidate:', error);
-      }
-    }
-    
-    // Handle user disconnected
-    function handleUserDisconnected(userId, userType) {
-      console.log(`User disconnected: ${userId}, type: ${userType}`);
-      if (userType === 'interviewer') {
-        statusIndicator.classList.remove('status-connected');
-        statusIndicator.classList.add('status-disconnected');
-        connectionStatus.textContent = 'Interviewer disconnected.';
-        remoteVideo.srcObject = null;
-        if (peerConnection) {
-          peerConnection.close();
-          peerConnection = null;
-        }
-        addSystemMessage('Interviewer disconnected');
-      }
-    }
-    
-    // Handle transcription
-    function handleTranscription(transcript, fromUserId) {
-      if (fromUserId !== userId) {
-        addTranscriptMessage('Interviewer', transcript);
-      }
-    }
-    
-    // Create peer connection
-    function createPeerConnection(otherUserId) {
-      if (peerConnection) {
-        peerConnection.close();
-      }
-      
-      console.log('Creating peer connection with:', otherUserId);
-      peerConnection = new RTCPeerConnection(iceServers);
-      
-      // Add local tracks to the connection
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
       });
       
-      // Handle incoming remote stream
-      peerConnection.ontrack = event => {
-        console.log('Remote track received');
-        remoteVideo.srcObject = event.streams[0];
-        remoteStream = event.streams[0];
-      };
-      
-      // Handle ICE candidates
-      peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          console.log('Sending ICE candidate');
-          socket.emit('ice-candidate', roomId, event.candidate);
-        }
-      };
-      
-      peerConnection.onconnectionstatechange = event => {
-        console.log('Connection state changed:', peerConnection.connectionState);
-        if (peerConnection.connectionState === 'connected') {
-          statusIndicator.classList.remove('status-connecting');
-          statusIndicator.classList.add('status-connected');
-          connectionStatus.textContent = 'Connected to interviewer.';
-        } else if (peerConnection.connectionState === 'failed' || 
-                  peerConnection.connectionState === 'disconnected' ||
-                  peerConnection.connectionState === 'closed') {
-          console.log('Connection lost, attempting to reconnect...');
-          // Don't immediately recreate as it might be handled by the server reconnection
-        }
-      };
-      
-      peerConnection.onicegatheringstatechange = event => {
-        console.log('ICE gathering state:', peerConnection.iceGatheringState);
-      };
-      
-      peerConnection.onsignalingstatechange = event => {
-        console.log('Signaling state:', peerConnection.signalingState);
-      };
-      
-      // Set up data channel for extra reliability
-      const dataChannel = peerConnection.createDataChannel('chat', {
-        ordered: true
-      });
-      
-      dataChannel.onopen = () => {
-        console.log('Data channel opened');
-      };
-      
-      dataChannel.onclose = () => {
-        console.log('Data channel closed');
-      };
-      
-      dataChannel.onerror = (error) => {
-        console.error('Data channel error:', error);
-      };
-      
-      peerConnection.ondatachannel = (event) => {
-        const receiveChannel = event.channel;
-        receiveChannel.onmessage = (e) => {
+      function setupSocketEvents() {
+        socket.on('user-connected', (otherUserId, userType) => {
+          if (userType === 'interviewer') {
+            statusIndicator.classList.remove('status-connecting');
+            statusIndicator.classList.add('status-connected');
+            connectionStatus.textContent = 'Connected to interviewer!';
+            addSystemMessage('Connected to interviewer');
+          }
+        });
+        
+        socket.on('offer', async (offer, senderId) => {
           try {
-            const message = JSON.parse(e.data);
-            if (message.type === 'ping') {
-              // Respond to ping
-              dataChannel.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            if (!peerConnection) {
+              createPeerConnection();
+            }
+            
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', roomId, answer);
+          } catch (error) {
+            console.error('Error handling offer:', error);
+          }
+        });
+        
+        socket.on('ice-candidate', async (candidate) => {
+          try {
+            if (peerConnection) {
+              await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             }
           } catch (error) {
-            console.error('Error parsing data channel message:', error);
+            console.error('Error adding ICE candidate:', error);
+          }
+        });
+        
+        socket.on('user-disconnected', (userId, userType) => {
+          if (userType === 'interviewer') {
+            statusIndicator.classList.remove('status-connected');
+            statusIndicator.classList.add('status-disconnected');
+            connectionStatus.textContent = 'Interviewer disconnected.';
+            remoteVideo.srcObject = null;
+            
+            if (peerConnection) {
+              peerConnection.close();
+              peerConnection = null;
+            }
+            
+            addSystemMessage('Interviewer disconnected');
+          }
+        });
+        
+        socket.on('transcription', (transcript, fromUserId) => {
+          if (fromUserId !== userId) {
+            addTranscriptMessage('Interviewer', transcript);
+          }
+        });
+      }
+      
+      function createPeerConnection() {
+        const configuration = {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        };
+        
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        // Add local tracks
+        localStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, localStream);
+        });
+        
+        // ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', roomId, event.candidate);
           }
         };
-      };
-      
-      return peerConnection;
-    }
-    
-    // Setup speech recognition
-    function setupSpeechRecognition() {
-      recognition = new webkitSpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      
-      let currentTranscript = '';
-      
-      recognition.onresult = (event) => {
-        if (!isTranscribing) return;
         
-        let interimTranscript = '';
-        let finalTranscript = '';
+        // Remote stream
+        peerConnection.ontrack = (event) => {
+          remoteVideo.srcObject = event.streams[0];
+        };
         
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-        
-        if (finalTranscript && finalTranscript !== currentTranscript) {
-          currentTranscript = finalTranscript;
-          addTranscriptMessage('You', finalTranscript);
-          socket.emit('transcription', roomId, finalTranscript, userId);
-        }
-      };
-      
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error', event.error);
-        if (event.error === 'no-speech') {
-          // Restart recognition if it stops due to no speech
-          recognition.stop();
-          setTimeout(() => {
-            if (isTranscribing) {
-              try {
-                recognition.start();
-              } catch (e) {
-                console.error('Error restarting speech recognition:', e);
-              }
-            }
-          }, 1000);
-        }
-      };
-      
-      recognition.onend = () => {
-        // Restart recognition if it ends and should be active
-        if (isTranscribing) {
-          try {
-            setTimeout(() => {
-              recognition.start();
-            }, 500);
-          } catch (e) {
-            console.error('Error restarting speech recognition:', e);
-          }
-        }
-      };
-      
-      // Start recognition
-      try {
-        recognition.start();
-      } catch (e) {
-        console.error('Error starting speech recognition:', e);
+        return peerConnection;
       }
-    }
-    
-    // Toggle transcription
-    function toggleTranscription() {
-      isTranscribing = autoTranscriptSwitch.checked;
       
-      if (isTranscribing && recognition) {
+      function setupUIControls() {
+        // Mute button
+        muteBtn.addEventListener('click', () => {
+          const audioTracks = localStream.getAudioTracks();
+          if (audioTracks.length === 0) return;
+          
+          isMuted = !isMuted;
+          audioTracks[0].enabled = !isMuted;
+          
+          muteBtn.innerHTML = isMuted ? 
+            '<i class="bi bi-mic-mute-fill"></i>' : 
+            '<i class="bi bi-mic-fill"></i>';
+          
+          muteBtn.classList.toggle('active', isMuted);
+          
+          addSystemMessage(isMuted ? 'You muted your microphone' : 'You unmuted your microphone');
+        });
+        
+        // Video toggle button
+        videoToggleBtn.addEventListener('click', () => {
+          const videoTracks = localStream.getVideoTracks();
+          if (videoTracks.length === 0) return;
+          
+          isVideoOff = !isVideoOff;
+          videoTracks[0].enabled = !isVideoOff;
+          
+          videoToggleBtn.innerHTML = isVideoOff ? 
+            '<i class="bi bi-camera-video-off-fill"></i>' : 
+            '<i class="bi bi-camera-video-fill"></i>';
+          
+          videoToggleBtn.classList.toggle('active', isVideoOff);
+          
+          addSystemMessage(isVideoOff ? 'You turned off your camera' : 'You turned on your camera');
+        });
+        
+        // Leave button
+        leaveBtn.addEventListener('click', () => {
+          if (confirm('Are you sure you want to leave the interview?')) {
+            if (localStream) {
+              localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (peerConnection) {
+              peerConnection.close();
+            }
+            
+            if (recognition) {
+              recognition.stop();
+            }
+            
+            window.location.href = '/';
+          }
+        });
+        
+        // Transcription toggle
+        autoTranscriptSwitch.addEventListener('change', () => {
+          if (recognition) {
+            if (autoTranscriptSwitch.checked) {
+              recognition.start();
+            } else {
+              recognition.stop();
+            }
+          }
+        });
+      }
+      
+      function setupSpeechRecognition() {
+        if (!('webkitSpeechRecognition' in window)) {
+          console.log('Speech recognition not available');
+          autoTranscriptSwitch.disabled = true;
+          autoTranscriptSwitch.checked = false;
+          return;
+        }
+        
+        recognition = new webkitSpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        
+        let currentTranscript = '';
+        
+        recognition.onresult = (event) => {
+          if (!autoTranscriptSwitch.checked) return;
+          
+          let interimTranscript = '';
+          let finalTranscript = '';
+          
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          
+          if (finalTranscript && finalTranscript !== currentTranscript) {
+            currentTranscript = finalTranscript;
+            addTranscriptMessage('You', finalTranscript);
+            socket.emit('transcription', roomId, finalTranscript, userId);
+          }
+        };
+        
+        recognition.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'no-speech') {
+            recognition.stop();
+            setTimeout(() => {
+              if (autoTranscriptSwitch.checked) {
+                try {
+                  recognition.start();
+                } catch (e) {}
+              }
+            }, 1000);
+          }
+        };
+        
+        recognition.onend = () => {
+          if (autoTranscriptSwitch.checked) {
+            try {
+              recognition.start();
+            } catch (e) {}
+          }
+        };
+        
         try {
           recognition.start();
         } catch (e) {
           console.error('Error starting speech recognition:', e);
         }
-      } else if (recognition) {
-        recognition.stop();
-      }
-    }
-    
-    // Add transcript message
-    function addTranscriptMessage(user, text) {
-      const timestamp = new Date().toLocaleTimeString();
-      const messageData = { user, text, timestamp };
-      transcriptData.push(messageData);
-      
-      const messageDiv = document.createElement('div');
-      messageDiv.className = user === 'You' ? 'transcript-msg candidate-msg' : 'transcript-msg interviewer-msg';
-      
-      messageDiv.innerHTML = `
-        <div class="transcript-user">${user} <small class="text-muted">${timestamp}</small></div>
-        <div class="transcript-text">${text}</div>
-      `;
-      
-      // Clear "Transcript will appear here" message if it exists
-      if (transcriptContainer.querySelector('.text-center.text-muted.py-3')) {
-        transcriptContainer.innerHTML = '';
       }
       
-      transcriptContainer.appendChild(messageDiv);
-      transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-    }
-    
-    // Add system message
-    function addSystemMessage(text) {
-      const timestamp = new Date().toLocaleTimeString();
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'transcript-msg text-center';
-      
-      messageDiv.innerHTML = `
-        <div class="transcript-text text-muted">
-          <i class="bi bi-info-circle"></i> ${text} <small>${timestamp}</small>
-        </div>
-      `;
-      
-      // Clear "Transcript will appear here" message if it exists
-      if (transcriptContainer.querySelector('.text-center.text-muted.py-3')) {
-        transcriptContainer.innerHTML = '';
+      function handleVisibilityChange() {
+        if (document.hidden && roomId) {
+          socket.emit('tab-switch', roomId);
+          
+          setTimeout(() => {
+            if (!document.hidden) {
+              tabSwitchNotification.classList.remove('hidden');
+              tabSwitchNotification.classList.add('fade-in');
+              
+              setTimeout(() => {
+                tabSwitchNotification.classList.add('hidden');
+              }, 5000);
+              
+              addSystemMessage('Warning: Tab switch detected and reported to interviewer');
+            }
+          }, 300);
+        }
       }
       
-      transcriptContainer.appendChild(messageDiv);
-      transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-    }
-    
-    // Toggle mute
-    function toggleMute() {
-      const audioTracks = localStream.getAudioTracks();
-      if (audioTracks.length === 0) return;
-      
-      isMuted = !isMuted;
-      audioTracks[0].enabled = !isMuted;
-      
-      muteBtn.innerHTML = isMuted ? 
-        '<i class="bi bi-mic-mute-fill"></i>' : 
-        '<i class="bi bi-mic-fill"></i>';
-      
-      muteBtn.classList.toggle('active', isMuted);
-      
-      addSystemMessage(isMuted ? 'You muted your microphone' : 'You unmuted your microphone');
-    }
-    
-    // Toggle video
-    function toggleVideo() {
-      const videoTracks = localStream.getVideoTracks();
-      if (videoTracks.length === 0) return;
-      
-      isVideoOff = !isVideoOff;
-      videoTracks[0].enabled = !isVideoOff;
-      
-      videoToggleBtn.innerHTML = isVideoOff ? 
-        '<i class="bi bi-camera-video-off-fill"></i>' : 
-        '<i class="bi bi-camera-video-fill"></i>';
-      
-      videoToggleBtn.classList.toggle('active', isVideoOff);
-      
-      addSystemMessage(isVideoOff ? 'You turned off your camera' : 'You turned on your camera');
-    }
-    
-    // Leave interview
-    function leaveInterview() {
-      if (confirm('Are you sure you want to leave this interview?')) {
-        // Clean up
-        if (recognition) {
-          recognition.stop();
+      function addTranscriptMessage(user, text) {
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = user === 'You' ? 'transcript-msg candidate-msg' : 'transcript-msg interviewer-msg';
+        
+        messageDiv.innerHTML = `
+          <div class="transcript-user">${user} <small class="text-muted">${timestamp}</small></div>
+          <div class="transcript-text">${text}</div>
+        `;
+        
+        // Clear default message if it exists
+        if (transcriptContainer.querySelector('.text-center.text-muted.py-3')) {
+          transcriptContainer.innerHTML = '';
         }
         
-        if (detectionInterval) {
-          clearInterval(detectionInterval);
-        }
-        
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-        }
-        
-        if (peerConnection) {
-          peerConnection.close();
-        }
-        
-        window.location.href = '/';
-      }
-    }
-    
-    // Handle visibility change (tab switching)
-    function handleVisibilityChange() {
-      if (document.hidden) {
-        // User has switched tabs or minimized the window
-        socket.emit('tab-switch', roomId);
-        
-        // Show notification when they return
-        setTimeout(() => {
-          if (!document.hidden) {
-            showTabSwitchWarning();
-          }
-        }, 300);
-      }
-    }
-    
-    // Show tab switch warning
-    function showTabSwitchWarning() {
-      // Only show the warning when they return to the tab
-      if (!document.hidden) {
-        tabSwitchNotification.classList.remove('hidden');
-        tabSwitchNotification.classList.add('fade-in');
-        
-        // Hide after 5 seconds
-        setTimeout(() => {
-          tabSwitchNotification.classList.add('hidden');
-        }, 5000);
-        
-        addSystemMessage('Warning: Tab switch was detected and reported');
-      }
-    }
-    
-    // Initialize the application when page loads
-    window.addEventListener('DOMContentLoaded', init);
-    
-    // Handle errors gracefully
-    window.addEventListener('error', function(event) {
-      console.error('Global error:', event.error);
-      // Don't show alerts for all errors to avoid annoying the user
-      // but log them for debugging
-    });
-    
-    // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', function(event) {
-      console.error('Unhandled promise rejection:', event.reason);
-    });
-    
-    // Handle beforeunload to clean up resources
-    window.addEventListener('beforeunload', function() {
-      if (recognition) {
-        recognition.stop();
+        transcriptContainer.appendChild(messageDiv);
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
       }
       
-      if (detectionInterval) {
-        clearInterval(detectionInterval);
-      }
-      
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      
-      if (peerConnection) {
-        peerConnection.close();
+      function addSystemMessage(text) {
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'transcript-msg text-center';
+        
+        messageDiv.innerHTML = `
+          <div class="transcript-text text-muted">
+            <i class="bi bi-info-circle"></i> ${text} <small>${timestamp}</small>
+          </div>
+        `;
+        
+        // Clear default message if it exists
+        if (transcriptContainer.querySelector('.text-center.text-muted.py-3')) {
+          transcriptContainer.innerHTML = '';
+        }
+        
+        transcriptContainer.appendChild(messageDiv);
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
       }
     });
   </script>
