@@ -1,0 +1,31 @@
+{
+    "version": 2,
+    "builds": [
+      {
+        "src": "server.js",
+        "use": "@vercel/node"
+      },
+      {
+        "src": "public/**/*.html",
+        "use": "@vercel/static"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/",
+        "dest": "/public/index.html"
+      },
+      {
+        "src": "/candidate",
+        "dest": "/public/candidate.html"
+      },
+      {
+        "src": "/interviewer",
+        "dest": "/public/interviewer.html"
+      },
+      {
+        "src": "/(.*)",
+        "dest": "server.js"
+      }
+    ]
+  }
